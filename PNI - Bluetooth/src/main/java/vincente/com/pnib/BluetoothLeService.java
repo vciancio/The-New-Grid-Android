@@ -8,19 +8,27 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.le.AdvertiseCallback;
+import android.bluetooth.le.AdvertiseData;
+import android.bluetooth.le.AdvertiseSettings;
+import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,7 +53,7 @@ public class BluetoothLeService extends Service{
     //Current State of our BLE Adapter
     private int mAdapterState = 0;
 
-    private BroadcastUpdateThread broadcastUpdateThread;
+    private GatherDevicesForUpdateThread gatherDevicesForUpdateThread;
     private Handler mHandler;
 
     @Override
@@ -58,7 +66,18 @@ public class BluetoothLeService extends Service{
         //TODO: Replace this with the actual config from the library
         mConfig = new Config();
         mConfig.setIsDebugging(true);
-        mConfig.UUID_NAME = "2b382cd6-eb3a-11e5-9ce9-5e5517507c66";
+//        mConfig.UUID_NAME = "2b382cd6-eb3a-11e5-9ce9-5e5517507c66";
+        String uuid = UUID.randomUUID().toString();
+        uuid = uuid.substring(uuid.lastIndexOf("-"));
+        mConfig.UUID_NAME = "";
+        for(int i=0; i<6; i++){
+            mConfig.UUID_NAME += uuid.substring(i*2, (i*2)+1);
+            mConfig.UUID_NAME += ":";
+        }
+        mConfig.UUID_NAME = mConfig.UUID_NAME.replace(mConfig.UUID_NAME.substring(mConfig.UUID_NAME.length()-1), "");
+
+        mConfig.setName("FTN");
+
 
         //If we don't have the bluetooth adapter, then wait for someone to turn it on.
         if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
@@ -67,12 +86,44 @@ public class BluetoothLeService extends Service{
             sendBroadcast(enableBtIntent);
             mBluetoothAdapter = null;
         }
+
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         log("Started Service!");
         mHandler.post(updateRunnable);
+
+        //Setup Advertisement
+        BluetoothLeAdvertiser advertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+        AdvertiseSettings settings = new AdvertiseSettings.Builder()
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+                .setConnectable(true)
+                .build();
+
+        ParcelUuid mApplicationParcelUUID = new ParcelUuid(UUID.fromString(mConfig.UUID_APPLICATION));
+        ParcelUuid mNameParcelUUID= new ParcelUuid(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME));
+        AdvertiseData advertiseData = new AdvertiseData.Builder()
+                .setIncludeDeviceName(false)
+                .addServiceUuid(mApplicationParcelUUID)
+                .addServiceData(mApplicationParcelUUID, "FTN".getBytes(Charset.forName("UTF-8")))
+                .build();
+        AdvertiseCallback advertiseCallback = new AdvertiseCallback() {
+            @Override
+            public void onStartSuccess(AdvertiseSettings settingsInEffect) {
+                super.onStartSuccess(settingsInEffect);
+                Log.d(BluetoothLeService.class.getSimpleName(), "Started Advertising!");
+            }
+
+            @Override
+            public void onStartFailure(int errorCode) {
+                super.onStartFailure(errorCode);
+                Log.e(BluetoothLeService.class.getSimpleName(), "Failed to start advertising: error code " + errorCode);
+            }
+        };
+
+        advertiser.startAdvertising(settings, advertiseData, advertiseCallback);
         return 0;
     }
 
@@ -110,9 +161,9 @@ public class BluetoothLeService extends Service{
      * then broadcast an update telling out neighbors our current status</p>
      */
     public synchronized void broadcastUpdate(){
-        BroadcastUpdateThread broadcastUpdateThread = new BroadcastUpdateThread();
-        broadcastUpdateThread.start();
-        this.broadcastUpdateThread = broadcastUpdateThread;
+        GatherDevicesForUpdateThread gatherDevicesForUpdateThread = new GatherDevicesForUpdateThread();
+        gatherDevicesForUpdateThread.start();
+        this.gatherDevicesForUpdateThread = gatherDevicesForUpdateThread;
     }
 
     /**
@@ -123,6 +174,9 @@ public class BluetoothLeService extends Service{
             Log.d(TAG, message);
     }
 
+    /**
+     * Formats a Bluetooth Device's Properties into a string so we can see it visibly.
+     */
     private String describeBluetoothDevice(BluetoothDevice device){
         JSONObject object = new JSONObject();
         try {
@@ -151,22 +205,35 @@ public class BluetoothLeService extends Service{
      *     <li>Send them your routing table</li>
      * </p>
      */
-    private class BroadcastUpdateThread extends Thread{
+    private class GatherDevicesForUpdateThread extends Thread{
         private BluetoothLeScanner mScanner;
         private Handler mHandler;
         GetNeighborUpdateThread neighborUpdateThread;
 
-        public BroadcastUpdateThread(){
+        public GatherDevicesForUpdateThread(){
             mScanner = mBluetoothAdapter.getBluetoothLeScanner();
             mHandler = new Handler();
         }
 
         @Override
         public void run() {
+            //Build a List of Filters so we only look for our own app
+            ArrayList<ScanFilter> filters = new ArrayList<>();
+            ScanFilter filter = new ScanFilter.Builder()
+                    .setServiceUuid(new ParcelUuid(UUID.fromString(mConfig.UUID_APPLICATION)))
+                    .build();
+            filters.add( filter );
+
+            //Scann Settings
+            ScanSettings settings = new ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+                    .build();
+
             log("Starting to scan");
             mAdapterState = STATE_CONNECTING;
             neighborUpdateThread = new GetNeighborUpdateThread();
-            mScanner.startScan(mScanCallback);
+            mScanner.startScan(filters, settings, mScanCallback);
+//            mScanner.startScan(mScanCallback);
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -181,8 +248,18 @@ public class BluetoothLeService extends Service{
         private ScanCallback mScanCallback = new ScanCallback() {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
-                log("Found Device: " + describeBluetoothDevice(result.getDevice()));
-                neighborUpdateThread.addDeviceToQueue(result.getDevice());
+                String log = "Found Device: " + describeBluetoothDevice(result.getDevice());
+                if(result.getScanRecord() != null && result.getScanRecord().getServiceData() != null){
+                    for(int i=0; i<result.getScanRecord().getServiceData().size(); i++){
+                        ParcelUuid uuid = result.getScanRecord().getServiceUuids().get(i);
+                        byte[] data = result.getScanRecord().getServiceData(uuid);
+                        log += ", {'uuid':'"+uuid+"', 'advertisement':'" + (data==null?"null":new String(data))+"'}";
+                    }
+
+                }
+                log(log);
+                neighborUpdateThread.addResultToQueue(result);
+
             }
 
             @Override
@@ -190,7 +267,7 @@ public class BluetoothLeService extends Service{
                 log("Batch Results:");
                 for(ScanResult result : results){
                     log("\t\t" + describeBluetoothDevice(result.getDevice()));
-                    neighborUpdateThread.addDeviceToQueue(result.getDevice());
+                    neighborUpdateThread.addResultToQueue(result);
                 }
             }
 
@@ -203,41 +280,52 @@ public class BluetoothLeService extends Service{
 
     private class GetNeighborUpdateThread extends Thread{
         private final static String TAG = "GetNeighborUpdateThread";
-        private final ArrayList<BluetoothDevice> deviceQueue;
-        private final ArrayList<BluetoothDevice> devicesToUpdate;
+        private final ArrayList<ScanResult> resultQueue;
+        private final ArrayList<ScanResult> devicesToUpdate;
         private CountDownLatch characteristicLatch;
         private JSONObject currentBuildingObject;
 
         public GetNeighborUpdateThread(){
-            deviceQueue = new ArrayList<>();
+            resultQueue = new ArrayList<>();
             devicesToUpdate = new ArrayList<>();
+            currentBuildingObject = new JSONObject();
         }
 
         @Override
         public void run() {
             Log.d(TAG, "Started GetNeighborUpdateThread");
-            while(!deviceQueue.isEmpty()){
-                BluetoothDevice device = deviceQueue.get(0);
-                deviceQueue.remove(0);
-                devicesToUpdate.add(device);
+            while(!resultQueue.isEmpty()){
+                final ScanResult result = resultQueue.get(0);
+                resultQueue.remove(0);
+                devicesToUpdate.add(result);
 
                 //We got our Device! Time to try to connect to it
-                Log.d(TAG, "Trying to connect to: " + describeBluetoothDevice(device));
-                BluetoothGatt gattConnection = device.connectGatt(getBaseContext(), false, gattCallback);
+                Log.d(TAG, "Trying to connect to: " + describeBluetoothDevice(result.getDevice()));
+
+                //Work around to try and connect to a device. Some people have achieved it by running the conncet on the UI thread
+                final BluetoothGatt[] gattConnection = new BluetoothGatt[1];
+                new Handler(getApplicationContext().getMainLooper()).post(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                gattConnection[0] =result.getDevice().connectGatt(getBaseContext(), true, gattCallback, BluetoothDevice.TRANSPORT_LE);
+                            }
+                        }
+                );
                 mAdapterState = STATE_CONNECTING;
                 characteristicLatch = new CountDownLatch(1);
 
                 //Wait for us to finish getting all of our characteristics needed for the node or timeout
                 try {
                     Log.d(TAG, "Waiting for the device to finish getting characteristics or to timeout. Then Disconnect");
-                    characteristicLatch.await(5000, TimeUnit.MILLISECONDS);
+                    characteristicLatch.await(10000, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
 
-                if(gattConnection != null) {
-                    gattConnection.disconnect();
-                    gattConnection.close();
+                if(gattConnection[0] != null) {
+                    gattConnection[0].disconnect();
+                    gattConnection[0].close();
                 }
                 mAdapterState = STATE_NONE;
             }
@@ -248,18 +336,18 @@ public class BluetoothLeService extends Service{
          * <p>Add Devices to the queue so we can get their information, store it, and update them with
          * our information</p>
          */
-        public synchronized void addDeviceToQueue(BluetoothDevice device){
-            synchronized(deviceQueue){
+        public synchronized void addResultToQueue(ScanResult mNewResult){
+            synchronized(resultQueue){
                 boolean shouldAdd = true;
-                for(BluetoothDevice updateDevice : deviceQueue){
-                    if(updateDevice.getAddress().equals(device.getAddress())){
+                for(ScanResult mQueuedResult : resultQueue){
+                    if(mQueuedResult.getDevice().getAddress().equals(mNewResult.getDevice().getAddress())){
                         shouldAdd = false;
                         break;
                     }
                 }
                 if(shouldAdd) {
-                    deviceQueue.add(device);
-                    Log.d(TAG, "Added: " + describeBluetoothDevice(device));
+                    resultQueue.add(mNewResult);
+                    Log.d(TAG, "Added: " + describeBluetoothDevice(mNewResult.getDevice()));
                 }
             }
         }
@@ -282,17 +370,26 @@ public class BluetoothLeService extends Service{
             @Override
             public void onServicesDiscovered(BluetoothGatt gatt, int status) {
                 //We found a service that matched ours! Lets poll it for info
+                Log.d(TAG, gatt.getDevice().getAddress() + ": In OnServicesDiscovered");
                 if(status == BluetoothGatt.GATT_SUCCESS){
-                    Log.d(TAG, gatt.getDevice().getAddress() + " has our application on it! Lets log it!");
+                    Log.d(TAG, gatt.getDevice().getAddress() + ": Connected Successfully to service");
 
                     //We now know that we can get info from the device. Create a new JSONObject here.
-                    currentBuildingObject = new JSONObject();
-
                     //TODO: Ask for a Characteristic Read here
-                    gatt.readCharacteristic(
-                            new BluetoothGattCharacteristic(UUID.fromString(mConfig.UUID_NAME),
+                    Log.d(TAG, "Going to try and read characteristics from the device");
+                    if(gatt.readCharacteristic(
+                            new BluetoothGattCharacteristic(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME),
                                     BluetoothGattCharacteristic.PROPERTY_READ,
-                                    BluetoothGattCharacteristic.PERMISSION_READ));
+                                    BluetoothGattCharacteristic.PERMISSION_READ)
+                    )){
+                        Log.d(TAG, gatt.getDevice().getAddress() + ": We started to read from the Device");
+                    }
+                    else{
+                        Log.e(TAG, gatt.getDevice().getAddress() + ": We failed at initiating a read from the device");
+                    }
+                }
+                else if(status == BluetoothGatt.GATT_FAILURE){
+                    Log.d(TAG, gatt.getDevice().getAddress() + ": Failed to connect to the Gatt Service");
                 }
                 else{
                     Log.d(TAG, "onServicesDiscovered received: " + status);
@@ -303,7 +400,7 @@ public class BluetoothLeService extends Service{
             public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
                 super.onCharacteristicRead(gatt, characteristic, status);
 
-                //Complete the read into a fomrat and log to the file
+                //Complete the read into a format and log to the file
                 //If we have read all of the characteristics we need, disconnect from the phone.
                 if(status == BluetoothGatt.GATT_SUCCESS){
                     Log.d(TAG, "Got the characteristic: " + characteristic.getUuid().toString());

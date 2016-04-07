@@ -6,8 +6,10 @@ package vincente.com.pnib;
 public class Config {
 
     public String UUID_APPLICATION = "fa87c0d0-afac-11de-8a39-0800200c9a66"; // Default UUID of the Application
+    public static final String UUID_CHARACTERISTIC_NAME = "0bc87b4f-0f27-4a53-93ae-52cf788a85aa";
+
     public String UUID_NAME = null;
-    private String name = "TheNewGrid"; // Default Name of the Application
+    private String name = "TheFlash"; // Default Name of the Application
     private long scanLength = 10000; //Default 10 Seconds
     private long updatePeriod = 60000; // Time between updates
 
