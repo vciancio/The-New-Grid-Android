@@ -117,6 +117,7 @@ public class GattServerService extends Service {
                 BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE
         );
+        writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
         profileService.addCharacteristic(nameCharacteristic);
         profileService.addCharacteristic(writeCharacteristic);
