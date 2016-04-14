@@ -15,7 +15,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
-import vincente.com.pnib.BluetoothLeService_proto;
+import vincente.com.pnib.BluetoothLeService;
+import vincente.com.pnib.GattServerService;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -46,7 +47,9 @@ public class MainActivity extends AppCompatActivity {
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent = new Intent(MainActivity.this, BluetoothLeService_proto.class);
+                Intent intent = new Intent(MainActivity.this, GattServerService.class);
+//                startService(intent);
+                intent = new Intent(MainActivity.this, BluetoothLeService.class);
                 startService(intent);
             }
         });
@@ -58,7 +61,9 @@ public class MainActivity extends AppCompatActivity {
             case MY_PERMISSION_GET_LOCATION:
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Intent intent = new Intent(this, BluetoothLeService_proto.class);
+                    Intent intent = new Intent(this, BluetoothLeService.class);
+                    startService(intent);
+                    intent = new Intent(MainActivity.this, GattServerService.class);
                     startService(intent);
                     Log.d("Permissions", "Permission granted");
                 } else {

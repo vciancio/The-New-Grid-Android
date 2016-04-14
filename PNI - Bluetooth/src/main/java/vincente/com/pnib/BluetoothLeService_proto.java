@@ -67,7 +67,7 @@ public class BluetoothLeService_proto extends Service{
         mHandler = new Handler();
 
         //TODO: Replace this with the actual config from the library
-        mConfig = new Config();
+        mConfig = Config.getInstance();
         mConfig.setIsDebugging(true);
 //        mConfig.UUID_NAME = "2b382cd6-eb3a-11e5-9ce9-5e5517507c66";
         String uuid = UUID.randomUUID().toString();

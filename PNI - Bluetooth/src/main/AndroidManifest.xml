@@ -11,8 +11,8 @@
         android:label="@string/app_name"
         android:supportsRtl="true">
 
-        <service android:name=".BluetoothLeService_proto"/>
-
+        <service android:name=".BluetoothLeService"/>
+        <service android:name=".GattServerService"/>
     </application>
 
 </manifest>
