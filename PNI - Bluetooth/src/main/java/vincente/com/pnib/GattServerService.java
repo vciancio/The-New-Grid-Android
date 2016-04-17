@@ -22,8 +22,7 @@ import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.UUID;
 
 /**
@@ -74,7 +73,6 @@ public class GattServerService extends Service {
         AdvertiseData advertiseData = new AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .addServiceUuid(mApplicationParcelUUID)
-                .addServiceData(mApplicationParcelUUID, "FTN".getBytes(Charset.forName("UTF-8")))
                 .build();
         AdvertiseCallback advertiseCallback = new AdvertiseCallback() {
             @Override
@@ -114,10 +112,10 @@ public class GattServerService extends Service {
 
         BluetoothGattCharacteristic writeCharacteristic = new BluetoothGattCharacteristic(
                 UUID.fromString(Config.UUID_CHARACTERISTIC_WRITE),
-                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
+                BluetoothGattCharacteristic.PROPERTY_WRITE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE
         );
-        writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+        writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
 
         profileService.addCharacteristic(nameCharacteristic);
         profileService.addCharacteristic(writeCharacteristic);
@@ -147,14 +145,22 @@ public class GattServerService extends Service {
 
         @Override
         public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset, BluetoothGattCharacteristic characteristic) {
-            Log.d(TAG, "Characteristic was read! " + characteristic.getUuid() + ", returning " + characteristic.getStringValue(0));
-            super.onCharacteristicReadRequest(device, requestId, offset, characteristic);
+            Log.d(TAG, "Characteristic was read! " + characteristic.getUuid() + ", sending Response");
+            byte[] data;
+            switch(characteristic.getUuid().toString()){
+                case Config.UUID_CHARACTERISTIC_NAME:
+                    data = "yo".getBytes();
+                    break;
+                default:
+                    data = "no".getBytes();
+            }
+            server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, data);
         }
 
         @Override
         public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset, byte[] value) {
-            Log.d(TAG, "Someone tried to write a characteristic: " + "{'address':'" + device.getAddress()+"', 'value':'" + new String(value, StandardCharsets.UTF_8));
-            super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value);
+            Log.d(TAG, "Someone tried to write a characteristic: " + "{'address':'" + device.getAddress()+"', 'value':'" + Arrays.toString(value)+"}");
+            server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
         }
 
         @Override

@@ -1,5 +1,9 @@
 package vincente.com.pnib;
 
+import android.bluetooth.BluetoothDevice;
+
+import java.util.ArrayList;
+
 /**
  * Created by vincente on 3/10/16
  */
@@ -17,8 +21,11 @@ public class Config {
 
     private boolean isDebugging = false;
     private static Config instance = null;
+    private ArrayList<BluetoothDevice> knownDevices;
 
-    private Config(){}
+    private Config(){
+        knownDevices = new ArrayList<>();
+    }
 
     public static Config getInstance(){
         if(instance == null)
@@ -60,4 +67,33 @@ public class Config {
     public void setUpdatePeriod(long updatePeriod) {
         this.updatePeriod = updatePeriod;
     }
+
+    /**
+     * Adds the device to the known devices list.
+     * @param device Device we want to add
+     * @return <p> Whether or not we added the device (if false, we already know the device and don't
+     * need to write our key onto their device</p>
+     */
+    public boolean isInKnownDevices(BluetoothDevice device){
+        for(BluetoothDevice knownDevice : knownDevices){
+            if(knownDevice.getAddress().equals(device.getAddress()))
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * Add a device to our known list of devices
+     * @param device Device to add to our known list.
+     * @return Whether or not we added successfully.
+     */
+    public boolean addToKnownDevices(BluetoothDevice device){
+        if(isInKnownDevices(device))
+            return false;
+        synchronized (knownDevices){
+            knownDevices.add(device);
+        }
+        return true;
+    }
+
 }
