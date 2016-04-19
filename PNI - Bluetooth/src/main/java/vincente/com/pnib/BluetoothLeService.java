@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
@@ -30,9 +31,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by vincente on 4/12/16
@@ -40,11 +44,40 @@ import java.util.concurrent.CountDownLatch;
  * and receive updates
  */
 public class BluetoothLeService extends Service{
+
+    /**
+     * Whether or not we already did our init.
+     */
     private boolean init = false;
+
+    /**
+     * My Current Bluetooth Manager
+     */
+    BluetoothManager mBluetoothManager;
+
+    /**
+     * My Current Bluetooth Adapter
+     */
     private BluetoothAdapter mBluetoothAdapter;
-    private PeriodicBleScanHandler periodicBleScanHandler;
-    private static int counter = 0;
+
+    /**
+     * A Handler which deals with periodically scanning for new devices
+     */
+    private BleServiceHandler bleServiceHandler;
+
+    /**
+     * The configuration for our library
+     */
     private Config mConfig;
+
+    /**
+     * A Queue for sending items to devices
+     */
+    private final Queue<QueueItem> sendQueue;
+
+    public BluetoothLeService() {
+        sendQueue = new ConcurrentLinkedQueue<>();
+    }
 
     @Nullable
     @Override
@@ -58,9 +91,9 @@ public class BluetoothLeService extends Service{
         if(init)
             return super.onStartCommand(intent, flags, startId);
 
-        periodicBleScanHandler = new PeriodicBleScanHandler(this);
-        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-
+        bleServiceHandler = new BleServiceHandler(this);
+        mBluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
+        BluetoothAdapter adapter = mBluetoothManager.getAdapter();
         if(!adapter.isEnabled()){
             Log.d(BluetoothLeService.class.getSimpleName(), "Bluetooth Adapter is not enabled, trying to enable...");
             if(!adapter.enable()){
@@ -72,30 +105,48 @@ public class BluetoothLeService extends Service{
         //Initiate our new Config and setup our adapters. Start Scanning Now!
         mConfig = Config.getInstance();
         mBluetoothAdapter = adapter;
-        periodicBleScanHandler.sendEmptyMessage(0);
+        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_SCANNING);
 
         init = true;
         return super.onStartCommand(intent, flags, startId);
     }
 
+    /**
+     * Will go through the queue and and send items as they are requested
+     * What:
+     *      0: Start Scanning
+     *      1: Stop Scanning
+     *      2: Start next Scan
+     *      3: Send Next In Queue
+     */
     @SuppressLint("HandlerLeak")
-    private class PeriodicBleScanHandler extends Handler {
-        private boolean isSendingMessages = false;
+    private class BleServiceHandler extends Handler {
+        public static final int WHAT_START_SCANNING = 0;
+        public static final int WHAT_STOP_SCANNING = 1;
+        public static final int WHAT_START_NEXT_SCAN = 2;
+        public static final int WHAT_SEND_NEXT_IN_QUEUE = 3;
         private final Context context;
-
-        private PeriodicBleScanHandler(Context context) {
+        private boolean isScanning = false;
+        private BleServiceHandler(Context context) {
             this.context = context;
         }
 
         @Override
         public void handleMessage(Message msg) {
             switch(msg.what){
-                case 0:
-                    isSendingMessages = true;
-                    new ScanNearbyDevicesAsync(context).execute();
+                case WHAT_START_SCANNING:
+                    isScanning = true;
+                case WHAT_START_NEXT_SCAN:
+                    if(isScanning)
+                        new ScanNearbyDevicesAsync(context).execute();
+                    break;
+                case WHAT_STOP_SCANNING:
+                    isScanning = false;
+                    break;
+                case WHAT_SEND_NEXT_IN_QUEUE:
+                    new Thread(sendRunnable).start();
                     break;
                 default:
-                    isSendingMessages = false;
             }
         }
     }
@@ -104,10 +155,7 @@ public class BluetoothLeService extends Service{
      * Scans for nearby devices so we can then query them and process them.
      */
     public class ScanNearbyDevicesAsync extends AsyncTask<Void, Void, Set<ScanResult>> {
-
         private Context context;
-        private CountDownLatch connectionLatch;
-        private CountDownLatch writeLatch;
 
         public ScanNearbyDevicesAsync(Context context) {
             this.context = context;
@@ -122,7 +170,7 @@ public class BluetoothLeService extends Service{
             ScanFilter filter = new ScanFilter.Builder()
                     .setServiceUuid(new ParcelUuid(UUID.fromString(mConfig.UUID_APPLICATION)))
                     .build();
-            filters.add( filter );
+            filters.add(filter);
 
             /* Setting up our Scan so we only have to find other people using our application */
             ScanSettings settings = new ScanSettings.Builder()
@@ -134,8 +182,16 @@ public class BluetoothLeService extends Service{
                 @Override
                 public void onScanResult(int callbackType, ScanResult result) {
                     super.onScanResult(callbackType, result);
-                    Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Added ScanResult: " + result);
-                    results.add(result);
+                    boolean shouldAdd = true;
+                    for(ScanResult old : results){
+                        if(result.getDevice().getAddress().equals(old.getDevice().getAddress())){
+                            shouldAdd = false;
+                        }
+                    }
+                    if(shouldAdd) {
+                        results.add(result);
+                        Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Added ScanResult: " + result);
+                    }
                 }
 
                 @Override
@@ -152,251 +208,365 @@ public class BluetoothLeService extends Service{
 
             bleScanner.startScan(filters, settings, mScanCallback);
 
-            periodicBleScanHandler.postDelayed(new Runnable() {
+            bleServiceHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     bleScanner.stopScan(mScanCallback);
                     Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Stopped Scanning");
                     processResults(results);
-                    periodicBleScanHandler.sendEmptyMessage(0);
+                    bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_NEXT_SCAN);
                 }
             }, mConfig.getScanLength());
             return results;
         }
 
         /**
-         * <p>
-         *      Try to get the service data for newly connected devices.
-         *          <li>Public Key</li>
-         *          <li>UUIDs of other people he knows</li>
-         * </p>
+         * This is where we will send the person our Credentials if they don't have them.
+         * As well, we will read theirs.
          * @param results results of a successful scan.
          */
-        private void processResults(Set<ScanResult> results){
-            for(ScanResult result : results){
-                    connectionLatch = new CountDownLatch(1);
-                BluetoothGatt gatt = result.getDevice().connectGatt(
-                        context, false, gattConnectCallback, BluetoothDevice.TRANSPORT_LE);
-                try {
-                    connectionLatch.await();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } finally{
-                    gatt.disconnect();
-                }
+        private void processResults(Set<ScanResult> results) {
+            for (ScanResult result : results) {
+                //TODO: This is where we store devices!
+                RememberingBluetoothGattCallback callback =
+                        new RememberingBluetoothGattCallback(result.getDevice());
+
+                QueueItem item = new QueueItem(result.getDevice().getAddress(), Config.UUID_SERVICE_PROFILE,
+                        Config.UUID_CHARACTERISTIC_WRITE, "Hello World!");
+                sendQueue.add(item);
+                bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
+
+                result.getDevice().connectGatt(
+                        getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
             }
             Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Finished Processing Scan results");
         }
+    }
 
-        private BluetoothGattCallback gattConnectCallback = new BluetoothGattCallback() {
-            private static final String TAG = "mBluetoothGattCallback";
-
-            @Override
-            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                Log.d(TAG, "\tFound Services!");
-
-                for(BluetoothGattService service : gatt.getServices()){
-                    Log.d(TAG, "\t\tFound Service: " + service.getUuid());
-                    if(service.getUuid().toString().equals(Config.UUID_SERVICE_PROFILE)){
-                        writeCharacteristic(gatt, service, "Hello World!");
-                    }
-                }
-            }
-
-            /**
-             * Will perform a get profile from the connected device in STATE_CONNECTED switch case
-             */
-            @Override
-            public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-                if(status == BluetoothGatt.GATT_SUCCESS){
-                    Log.d(TAG, "Successfully connected to " + gatt.getDevice().getAddress());
-                }
-                else{
-                    Log.d(TAG, "Could not connect to " + gatt.getDevice().getAddress());
-                }
-                switch(newState){
-                    case BluetoothProfile.STATE_CONNECTED:
-                        Log.d(TAG, "\tState Change: Connected to " + gatt.getDevice().getAddress());
-                        gatt.discoverServices();
-                        break;
-                    case BluetoothProfile.STATE_DISCONNECTED:
-                        Log.d(TAG, "\tState Change: Disconnected from " + gatt.getDevice().getAddress());
-                        break;
-                    default:
-                        Log.d(TAG, "\tWhatNewState");
-                }
-            }
-
-            /**
-             * This is where we are handling getting other people's profile
-             */
-            @Override
-            public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-                if(status == BluetoothGatt.GATT_SUCCESS) {
-                    Log.d(TAG, "\tSuccessfully read from gatt");
-                    switch (characteristic.getUuid().toString()) {
-                        case Config.UUID_CHARACTERISTIC_NAME:
-                            Log.d(TAG, "\t\tRead {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-                            break;
-                        default:
-                            Log.d(TAG, "\t\tRead an unknown UUID: {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-                    }
-                }
-                else{
-                    Log.e(TAG, "\tCouldn't read from " + gatt.getDevice().getAddress() + " correctly");
-                }
-                connectionLatch.countDown();
-            }
-
-            @Override
-            public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-                Log.d(TAG, "\tin onCharacteristicWrite");
-                if(status == BluetoothGatt.GATT_SUCCESS) {
-                    Log.d(TAG, "\tWrote Characteristic! {'value':'" + Arrays.toString(characteristic.getValue()) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-                }
-                writeLatch.countDown();
-            }
-
-            @Override
-            public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
-                Log.d(TAG, "In onReliableWriteCompleted");
-                if(status == BluetoothGatt.GATT_SUCCESS){
-                    Log.d(TAG, "\tCompleted Reliable Write successfully!");
-                }
-            }
-        };
-
-        /**
-         * Will start an attempt to read the Profile from the Connected Device.
-         * @param gatt
-         */
-        private void readProfileCharacteristic(BluetoothGatt gatt, BluetoothGattService service){
-            BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME));
-            if(gatt.readCharacteristic(characteristic)){
-                Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tSuccessfully initiated a read for " + Config.UUID_CHARACTERISTIC_NAME + " from " + gatt.getDevice().getAddress());
-            }
-            else{
-                Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\tFailed to initiate a read for " + Config.UUID_CHARACTERISTIC_NAME + " from " + gatt.getDevice().getAddress());
-                connectionLatch.countDown();
-            }
-        }
-
-        /**
-         * Writing to a characteristic.
-         * @param gatt
-         * @param service
-         * @param value
-         */
-        private void writeCharacteristic(BluetoothGatt gatt, BluetoothGattService service, String value){
-            BluetoothGattCharacteristic characteristic = null;
-            for(BluetoothGattCharacteristic tempChar : service.getCharacteristics()){
-                if(tempChar.getUuid().equals(UUID.fromString(Config.UUID_CHARACTERISTIC_WRITE))){
-                    characteristic = tempChar;
-                }
-            }
-            if(characteristic == null){
-                Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCouldn't find Write Characteristic...");
-                connectionLatch.countDown();
-                return;
-            }
-
-            /*
-                Packet Init - 20 bytes
-                |initial  |sequence#|      data|
-                |---------|---------|----------|
-                | 1 byte  | 2 bytes | 17 bytes |
-
-                * Sequence # will be total amount of sequence numbers for the transaction.
-                * Will be the size of the the message we are sending.
-                * Data will be the size of the data we are sending
-                * Initial will be set to '0x01'
-             */
-
-            /*
-                Packet - 20 bytes total
-                |initial  |sequence#|      data|
-                |---------|---------|----------|
-                | 1 byte  | 2 bytes | 17 bytes |
-
-                * Initial will be set to '0x00'
-                * Sequence number will align with which packet we're sending
-                * Data is the data we will be sending
-             */
-
-            //Max length for sending packets
-            final int PACKET_SIZE = 20;
-            final int INIT_SIZE = 1;
-            final int SEQUENCE_SIZE = 2;
-            final int MAX_DATA_SIZE = PACKET_SIZE-INIT_SIZE-SEQUENCE_SIZE;
-
-            ByteBuffer packet = ByteBuffer.allocate(20);
-            ByteBuffer dataBuffer = ByteBuffer.wrap(value.getBytes());
-            int dataLength  = dataBuffer.array().length;
-            short numOfPackets = (short) (Math.ceil(dataLength/17)+1);
-
-            Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tSending " + dataLength + " bytes over " + numOfPackets + " packets");
-            for(short i=-1; i<numOfPackets; i++){
-                Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCan start reliably writing: " + gatt.beginReliableWrite());
-                if(i==-1){
-                    packet.put((byte)0x01);
-                    packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(numOfPackets).array());
-                    packet.put(ByteBuffer.allocate(MAX_DATA_SIZE).putInt(dataLength).array());
-                }
-                else{
-                    int sendDataLength = (dataLength-MAX_DATA_SIZE*i>MAX_DATA_SIZE ?MAX_DATA_SIZE:dataLength);
-                    byte sendData[] = new byte[sendDataLength];
-                    dataBuffer.get(sendData);
-                    packet.put((byte) 0x00);
-                    packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(i).array());
-                    packet.put(sendData);
-                }
-
-                byte[] sendingPacket = packet.array();
-                packet.clear();
-
-                characteristic.setValue(sendingPacket);
-
-                Log.i(ScanNearbyDevicesAsync.class.getSimpleName(), "\tTrying to write data " + Arrays.toString(sendingPacket));
-
-//                if(gatt.writeCharacteristic(characteristic)){
-//                    Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\t\tSuccessfully wrote sequence " + i);
-//                }
-//                else{
-//                    Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\t\tFailed to complete writeCharacteristic(characteristic)");
-//                }
-                Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tTrying to execute Reliable Write " + i + ": " + gatt.executeReliableWrite());
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            connectionLatch.countDown();
+    /**
+     * Will start an attempt to read the Profile from the Connected Device.
+     *
+     * @param gatt
+     */
+    private void readProfileCharacteristic(BluetoothGatt gatt, BluetoothGattService service) {
+        BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME));
+        if (gatt.readCharacteristic(characteristic)) {
+            Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tSuccessfully initiated a read for " + Config.UUID_CHARACTERISTIC_NAME + " from " + gatt.getDevice().getAddress());
+        } else {
+            Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\tFailed to initiate a read for " + Config.UUID_CHARACTERISTIC_NAME + " from " + gatt.getDevice().getAddress());
         }
     }
 
     /**
      * Creates a queue of packets to be sent for a given message
-     * @param message message to be packed up and sent
+     * @param value message to be packed up and sent
      * @return queue of packages for a given message
      */
-    private static ArrayList<byte[]> createQueueForMessage(String message){
-        ArrayList<byte[]> packets = null;
+    private static ArrayList<byte[]> createPacketsForMessage(String value, boolean withMTU){
+        ArrayList<byte[]> packets = new ArrayList<>();
+        /*
+         Packet Init - 20 bytes
+         |initial  |sequence#|      data|
+         |---------|---------|----------|
+         | 1 byte  | 2 bytes | 17 bytes |
+
+         * Sequence # will be total amount of sequence numbers for the transaction.
+         * Will be the size of the the message we are sending.
+         * Data will be the size of the data we are sending
+         * Initial will be set to '0x01'
+         */
+
+        /*
+         Packet - 20 bytes total
+          |initial  |sequence#|      data|
+          |---------|---------|----------|
+          | 1 byte  | 2 bytes | 17 bytes |
+
+          * Initial will be set to '0x00'
+          * Sequence number will align with which packet we're sending
+          * Data is the data we will be sending
+          */
+
+        //Max length for sending packets
+        final int PACKET_SIZE = withMTU?256:20;
+        final int INIT_SIZE = 1;
+        final int SEQUENCE_SIZE = 2;
+        final int MAX_DATA_SIZE = PACKET_SIZE-INIT_SIZE-SEQUENCE_SIZE;
+
+        ByteBuffer packet = ByteBuffer.allocate(20);
+        ByteBuffer dataBuffer = ByteBuffer.wrap(value.getBytes());
+        int dataLength  = dataBuffer.array().length;
+        short numOfPackets = (short) (Math.ceil(dataLength/MAX_DATA_SIZE)+1);
+
+        Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCreating packets for " + dataLength + " bytes over " + numOfPackets + " packets");
+        for(short i=-1; i<numOfPackets; i++) {
+            if (i == -1) {
+                packet.put((byte) 0x01);
+                packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(numOfPackets).array());
+                packet.put(ByteBuffer.allocate(MAX_DATA_SIZE).putInt(dataLength).array());
+            } else {
+                int sendDataLength = (dataLength - MAX_DATA_SIZE * i > MAX_DATA_SIZE ? MAX_DATA_SIZE : dataLength);
+                byte sendData[] = new byte[sendDataLength];
+                dataBuffer.get(sendData);
+                packet.put((byte) 0x00);
+                packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(i).array());
+                packet.put(sendData);
+            }
+
+            packets.add(packet.array());
+            packet.clear();
+        }
         return packets;
     }
 
     /**
      * Sends the next packet in the queue
-     * @return false if we are sending the last packet, true if there's more packets to be sent
+     * @return false if there are no packets in the queue
      */
-    private boolean sendNextPacketInQueue(){
-        return false;
-    }
+    private Runnable sendRunnable = new Runnable() {
+        private final static String TAG = "SendRunnable";
+        @Override
+        public void run() {
+            if(sendQueue.isEmpty())
+                return;
+
+            final QueueItem item = sendQueue.poll();
+            Log.d(TAG, "Sending a Message to " + item.getAddress());
+
+            //Get the Device Reference we want to talk to.
+            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(item.getAddress());
+
+            //A latch to tell us when we've connected. Once we're connected and have the services, we'll start
+            final CountDownLatch connectionLatch = new CountDownLatch(2);
+
+            //Packets we're going to send
+            final ArrayList<byte[]> packets = createPacketsForMessage(item.getMessage(), true);
+
+            //This barrier is what allows us to send the next packets after we hear a response from the server
+            final CountUpAndDownLatch sendPacketLatch =new CountUpAndDownLatch(packets.size());
+
+            //Once we've connected, count down the connection latch to continue sending
+            BluetoothGattCallback callback = new BluetoothGattCallback() {
+                @Override
+                public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+                    super.onConnectionStateChange(gatt, status, newState);
+                    if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
+                        Log.d(TAG, "\t\tConnected to: " + gatt.getDevice().getAddress());
+                        connectionLatch.countDown();
+                        gatt.discoverServices();
+                    }
+                }
+
+                @Override
+                public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                    super.onServicesDiscovered(gatt, status);
+                    if(status == BluetoothGatt.GATT_SUCCESS){
+                        Log.d(TAG, "\t\tObtained Services for " + gatt.getDevice().getAddress());
+                        connectionLatch.countDown();
+                    }
+                }
+
+                @Override
+                public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                    super.onCharacteristicWrite(gatt, characteristic, status);
+                    if(status == BluetoothGatt.GATT_SUCCESS){
+                        Log.d("SendRunnable", "\t\tSuccessfully Wrote Packet " + (packets.size()-sendPacketLatch.getCount()));
+                        Log.d("SendRunnable", "\t\t\t" + Arrays.toString(packets.get(packets.size()-sendPacketLatch.getCount())));
+                        sendPacketLatch.countDown();
+                    }
+                }
+
+                @Override
+                public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+                    super.onMtuChanged(gatt, mtu, status);
+                    if(status == BluetoothGatt.GATT_SUCCESS){
+                        Log.d("SendRunnable", "\t\tSuccessfully got a new MTU size of " + mtu);
+                    }
+                }
+            };
+
+            BluetoothGatt mGatt = device.connectGatt(getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
+//            boolean usingMTU = mGatt.requestMtu(256);
+            //Wait for a state of Connected for 5000 ms. If we won't don't connect, end this;
+            try {
+                connectionLatch.await(5000, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            int gattConnectionState = mGatt.getConnectionState(device);
+            //If we can't connect, we'll return and requeue the message again.
+            if(gattConnectionState != BluetoothProfile.STATE_CONNECTED){
+                sendQueue.add(item);
+                return;
+            }
+
+            BluetoothGattService service = mGatt.getService(UUID.fromString(item.getServiceUuid()));
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(item.getCharacteristicUuid()));
+
+            //We're going to send packets. Wait until we get a response from the last one before sending again.
+            for(int i=0; i<packets.size(); i++){
+                characteristic.setValue(packets.get(i));
+                mGatt.writeCharacteristic(characteristic);
+                try {
+                    sendPacketLatch.waitUntil(packets.size()-i-1);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            //We've Finished sending this Queue Item! Time to send the next one
+            bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
+        }
+     };
 
     /**
      * Will start scanning for device and pulling their basic info at a constant interval
      */
-    private void startPeriodicScan(){
-        periodicBleScanHandler.sendEmptyMessage(0);
+    public void startPeriodicScan(){
+        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_SCANNING);
+    }
+
+    public void stopPeriodicScan(){
+        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_STOP_SCANNING);
+    }
+
+    /**
+     * A Class which allows us to save our connection so we can map the callbacks to the device.
+     */
+    private class RememberingBluetoothGattCallback extends BluetoothGattCallback{
+        private static final String TAG = "mBluetoothGattCallback";
+        private BluetoothDevice device;
+
+        private RememberingBluetoothGattCallback(BluetoothDevice device) {
+            this.device = device;
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            Log.d(TAG, "\tFound Services!");
+
+            for (BluetoothGattService service : gatt.getServices()) {
+                Log.d(TAG, "\t\tFound Service: " + service.getUuid());
+            }
+        }
+
+        /**
+         * Will perform a get profile from the connected device in STATE_CONNECTED switch case
+         */
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Successfully connected to " + gatt.getDevice().getAddress());
+            } else {
+                Log.d(TAG, "Could not connect to " + gatt.getDevice().getAddress());
+            }
+            switch (newState) {
+                case BluetoothProfile.STATE_CONNECTED:
+                    Log.d(TAG, "\tState Change: Connected to " + gatt.getDevice().getAddress());
+                    gatt.discoverServices();
+                    break;
+                case BluetoothProfile.STATE_DISCONNECTED:
+                    Log.d(TAG, "\tState Change: Disconnected from " + gatt.getDevice().getAddress());
+                    break;
+                default:
+                    Log.d(TAG, "\tWhatNewState");
+            }
+        }
+
+        /**
+         * This is where we are handling getting other people's profile
+         */
+        @Override
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "\tSuccessfully read from gatt");
+                switch (characteristic.getUuid().toString()) {
+                    case Config.UUID_CHARACTERISTIC_NAME:
+                        Log.d(TAG, "\t\tRead {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
+                        break;
+                    default:
+                        Log.d(TAG, "\t\tRead an unknown UUID: {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
+                }
+            } else {
+                Log.e(TAG, "\tCouldn't read from " + gatt.getDevice().getAddress() + " correctly");
+            }
+        }
+
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            Log.d(TAG, "\tin onCharacteristicWrite");
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "\tWrote Characteristic! {'value':'" + Arrays.toString(characteristic.getValue()) + "', 'uuid':'" + characteristic.getUuid() + "'}");
+            }
+        }
+
+        @Override
+        public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
+            Log.d(TAG, "In onReliableWriteCompleted");
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "\tCompleted Reliable Write successfully!");
+            }
+        }
+    }
+
+    /**
+     * An Item that is placed into the queue to send to a device.
+     */
+    private class QueueItem{
+        private String address;
+        private String serviceUuid;
+        private String characteristicUuid;
+        private String message;
+        private boolean isWrite;
+
+        public QueueItem(String address, String serviceUuid, String characteristicUuid, String message, boolean isWrite){
+            this.address = address;
+            this.serviceUuid = serviceUuid;
+            this.characteristicUuid = characteristicUuid;
+            this.message = message;
+            this.isWrite = isWrite;
+        }
+
+        /**
+         * This is a Read Request
+         * @param address
+         * @param serviceUuid
+         * @param characteristicUuid
+         */
+        public QueueItem(String address, String serviceUuid, String characteristicUuid) {
+            this(address, serviceUuid, characteristicUuid, null, false);
+        }
+
+        /**
+         * This is a Write Request
+         * @param address
+         * @param serviceUuid
+         * @param characteristicUuid
+         * @param message
+         */
+        public QueueItem(String address, String serviceUuid, String characteristicUuid, String message){
+            this(address, serviceUuid, characteristicUuid, message, true);
+        }
+
+        public String getAddress() {
+            return address;
+        }
+
+        public String getCharacteristicUuid() {
+            return characteristicUuid;
+        }
+
+        public String getServiceUuid() {
+            return serviceUuid;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public boolean isWrite() {
+            return isWrite;
+        }
     }
 }
