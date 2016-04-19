@@ -107,6 +107,7 @@ public class BluetoothLeService extends Service{
 
         private Context context;
         private CountDownLatch connectionLatch;
+        private CountDownLatch writeLatch;
 
         public ScanNearbyDevicesAsync(Context context) {
             this.context = context;
@@ -173,7 +174,7 @@ public class BluetoothLeService extends Service{
          */
         private void processResults(Set<ScanResult> results){
             for(ScanResult result : results){
-                    connectionLatch = new CountDownLatch(2);
+                    connectionLatch = new CountDownLatch(1);
                 BluetoothGatt gatt = result.getDevice().connectGatt(
                         context, false, gattConnectCallback, BluetoothDevice.TRANSPORT_LE);
                 try {
@@ -253,7 +254,7 @@ public class BluetoothLeService extends Service{
                 if(status == BluetoothGatt.GATT_SUCCESS) {
                     Log.d(TAG, "\tWrote Characteristic! {'value':'" + Arrays.toString(characteristic.getValue()) + "', 'uuid':'" + characteristic.getUuid() + "'}");
                 }
-                connectionLatch.countDown();
+                writeLatch.countDown();
             }
 
             @Override
@@ -323,32 +324,33 @@ public class BluetoothLeService extends Service{
              */
 
             //Max length for sending packets
-
-            final int packetSize = 20;
-            final int initSize = 1;
-            final int sequenceSize = 2;
-            final int dataSize = packetSize-initSize-sequenceSize;
+            final int PACKET_SIZE = 20;
+            final int INIT_SIZE = 1;
+            final int SEQUENCE_SIZE = 2;
+            final int MAX_DATA_SIZE = PACKET_SIZE-INIT_SIZE-SEQUENCE_SIZE;
 
             ByteBuffer packet = ByteBuffer.allocate(20);
             ByteBuffer dataBuffer = ByteBuffer.wrap(value.getBytes());
             int dataLength  = dataBuffer.array().length;
             short numOfPackets = (short) (Math.ceil(dataLength/17)+1);
 
-            Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCan start reliably writing: " + gatt.beginReliableWrite());
             Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tSending " + dataLength + " bytes over " + numOfPackets + " packets");
             for(short i=-1; i<numOfPackets; i++){
+                Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCan start reliably writing: " + gatt.beginReliableWrite());
                 if(i==-1){
                     packet.put((byte)0x01);
-                    packet.put(ByteBuffer.allocate(sequenceSize).putShort(numOfPackets).array());
-                    packet.put(ByteBuffer.allocate(dataSize).putInt(dataLength).array());
+                    packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(numOfPackets).array());
+                    packet.put(ByteBuffer.allocate(MAX_DATA_SIZE).putInt(dataLength).array());
                 }
                 else{
-                    byte sendData[] = new byte[dataSize];
+                    int sendDataLength = (dataLength-MAX_DATA_SIZE*i>MAX_DATA_SIZE ?MAX_DATA_SIZE:dataLength);
+                    byte sendData[] = new byte[sendDataLength];
                     dataBuffer.get(sendData);
-                    packet.put((byte)0x00);
-                    packet.put(ByteBuffer.allocate(dataSize).putShort(i).array());
+                    packet.put((byte) 0x00);
+                    packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(i).array());
                     packet.put(sendData);
                 }
+
                 byte[] sendingPacket = packet.array();
                 packet.clear();
 
@@ -356,22 +358,39 @@ public class BluetoothLeService extends Service{
 
                 Log.i(ScanNearbyDevicesAsync.class.getSimpleName(), "\tTrying to write data " + Arrays.toString(sendingPacket));
 
-                if(gatt.writeCharacteristic(characteristic)){
-                    Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tSuccessfully wrote sequence " + i);
-                }
-                else{
-                    Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\tFailed to complete writeCharacteristic(characteristic)");
-                }
+//                if(gatt.writeCharacteristic(characteristic)){
+//                    Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\t\tSuccessfully wrote sequence " + i);
+//                }
+//                else{
+//                    Log.e(ScanNearbyDevicesAsync.class.getSimpleName(), "\t\tFailed to complete writeCharacteristic(characteristic)");
+//                }
+                Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tTrying to execute Reliable Write " + i + ": " + gatt.executeReliableWrite());
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
-
-            connectionLatch.countDown();
             connectionLatch.countDown();
         }
+    }
+
+    /**
+     * Creates a queue of packets to be sent for a given message
+     * @param message message to be packed up and sent
+     * @return queue of packages for a given message
+     */
+    private static ArrayList<byte[]> createQueueForMessage(String message){
+        ArrayList<byte[]> packets = null;
+        return packets;
+    }
+
+    /**
+     * Sends the next packet in the queue
+     * @return false if we are sending the last packet, true if there's more packets to be sent
+     */
+    private boolean sendNextPacketInQueue(){
+        return false;
     }
 
     /**

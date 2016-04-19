@@ -22,6 +22,10 @@ import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -159,8 +163,22 @@ public class GattServerService extends Service {
 
         @Override
         public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset, byte[] value) {
-            Log.d(TAG, "Someone tried to write a characteristic: " + "{'address':'" + device.getAddress()+"', 'value':'" + Arrays.toString(value)+"}");
-            server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
+            ByteBuffer buffer = ByteBuffer.wrap(value);
+            boolean isInitial = buffer.get() != (byte)0x0;
+            short seqNumber = buffer.getShort();
+
+            //Handle Data
+            byte data[] = new byte[17];
+            buffer.get(data);
+            handleWriteRequest(device, isInitial, seqNumber, data);
+
+            boolean sentResponse = server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
+            if(sentResponse){
+                Log.d(TAG, "\tSent a response");
+            }
+            else{
+                Log.d(TAG, "\tCouldn't send a response");
+            }
         }
 
         @Override
@@ -168,4 +186,21 @@ public class GattServerService extends Service {
             super.onDescriptorReadRequest(device, requestId, offset, descriptor);
         }
     };
+
+    private void handleWriteRequest(BluetoothDevice device, boolean isInitial, short seqNum, byte[] data){
+        String json = getString(new String[]{"address", "isInitial", "seqNum", "data"}, device.getAddress(), isInitial, seqNum, Arrays.toString(data));
+        Log.d("GattServerService", "Got Write Request: " + json);
+    }
+
+    private String getString(String[] tags, Object... objects){
+        JSONObject jsonObject = new JSONObject();
+        for(int i=0; i<tags.length; i++){
+            try {
+                jsonObject.put(tags[i], objects[i]);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+        return jsonObject.toString();
+    }
 }
