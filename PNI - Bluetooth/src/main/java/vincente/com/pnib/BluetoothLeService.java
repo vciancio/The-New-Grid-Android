@@ -231,7 +231,9 @@ public class BluetoothLeService extends Service{
                         new RememberingBluetoothGattCallback(result.getDevice());
 
                 QueueItem item = new QueueItem(result.getDevice().getAddress(), Config.UUID_SERVICE_PROFILE,
-                        Config.UUID_CHARACTERISTIC_WRITE, "{'init':1, 'key':'4C114BA1FBB11'}");
+                        Config.UUID_CHARACTERISTIC_WRITE,
+                        "{'init':1, 'key':'4C114BA1FBB11'}");
+//                        "Hello World!'");
                 sendQueue.add(item);
                 bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
                 result.getDevice().connectGatt(
@@ -339,7 +341,7 @@ public class BluetoothLeService extends Service{
             BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(item.getAddress());
 
             //A latch to tell us when we've connected. Once we're connected and have the services, we'll start
-            final CountUpAndDownLatch connectionLatch = new CountUpAndDownLatch(3);
+            final CountUpAndDownLatch connectionLatch = new CountUpAndDownLatch(4);
 
             //Packets we're going to send
             final ArrayList<byte[]> packets = createPacketsForMessage(item.getMessage(), true);
