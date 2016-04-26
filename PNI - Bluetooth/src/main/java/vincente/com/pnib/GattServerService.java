@@ -17,6 +17,7 @@ import android.bluetooth.le.AdvertiseSettings;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.content.Context;
 import android.content.Intent;
+import android.database.CharArrayBuffer;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
@@ -27,6 +28,8 @@ import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -37,7 +40,8 @@ public class GattServerService extends Service {
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothManager mBluetoothManager;
     private BluetoothGattServer server;
-
+    private Map<String, Integer> mtuMap;
+    private Map<String, CharArrayBuffer> dataBuffer;
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -119,11 +123,12 @@ public class GattServerService extends Service {
                 BluetoothGattCharacteristic.PROPERTY_WRITE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE
         );
-        writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
         profileService.addCharacteristic(nameCharacteristic);
         profileService.addCharacteristic(writeCharacteristic);
         server.addService(profileService);
+        mtuMap = new HashMap<>();
     }
 
     BluetoothGattServerCallback serverCallback = new BluetoothGattServerCallback() {
@@ -134,6 +139,9 @@ public class GattServerService extends Service {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
                     Log.d(TAG, "Connected to: " + device.getAddress());
+                    if(!mtuMap.containsKey(device.getAddress())){
+                        mtuMap.put(device.getAddress(), 20);
+                    }
                     break;
                 case BluetoothProfile.STATE_DISCONNECTED:
                     Log.d(TAG, "Disconnected from: " + device.getAddress());
@@ -163,15 +171,16 @@ public class GattServerService extends Service {
 
         @Override
         public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, boolean preparedWrite, boolean responseNeeded, int offset, byte[] value) {
+            Log.d(TAG, "onCharacteristicWriteRequest: offset: " + offset);
             ByteBuffer buffer = ByteBuffer.wrap(value);
+
             boolean isInitial = buffer.get() != (byte)0x0;
             short seqNumber = buffer.getShort();
-
             //Handle Data
-            byte data[] = new byte[17];
-            buffer.get(data);
-            handleWriteRequest(device, isInitial, seqNumber, data);
-
+//            byte data[] = new byte[mtuMap.get(device.getAddress())-offset];
+//            buffer.get(data);
+//            handleWriteRequest(device, isInitial, seqNumber, data);
+            Log.d(TAG, "\tReceived data: " + new String(value));
             boolean sentResponse = server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
             if(sentResponse){
                 Log.d(TAG, "\tSent a response");
@@ -184,6 +193,12 @@ public class GattServerService extends Service {
         @Override
         public void onDescriptorReadRequest(BluetoothDevice device, int requestId, int offset, BluetoothGattDescriptor descriptor) {
             super.onDescriptorReadRequest(device, requestId, offset, descriptor);
+        }
+
+        @Override
+        public void onMtuChanged(BluetoothDevice device, int mtu) {
+            mtuMap.put(device.getAddress(), mtu);
+            Log.d(TAG, device.getAddress() + ": Got a request to change MTU to " + mtu);
         }
     };
 

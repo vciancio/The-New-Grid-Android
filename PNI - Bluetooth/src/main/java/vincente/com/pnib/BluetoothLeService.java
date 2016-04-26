@@ -35,8 +35,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by vincente on 4/12/16
@@ -86,11 +84,8 @@ public class BluetoothLeService extends Service{
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        //If we've already Init, then we don't have to start the constant scan again.
-        if(init)
-            return super.onStartCommand(intent, flags, startId);
-
+    public void onCreate() {
+        super.onCreate();
         bleServiceHandler = new BleServiceHandler(this);
         mBluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
         BluetoothAdapter adapter = mBluetoothManager.getAdapter();
@@ -98,15 +93,20 @@ public class BluetoothLeService extends Service{
             Log.d(BluetoothLeService.class.getSimpleName(), "Bluetooth Adapter is not enabled, trying to enable...");
             if(!adapter.enable()){
                 Toast.makeText(this, "Cannot turn on Bluetooth. Please do so.", Toast.LENGTH_SHORT).show();
-                return super.onStartCommand(intent, flags, startId);
             }
         }
 
         //Initiate our new Config and setup our adapters. Start Scanning Now!
         mConfig = Config.getInstance();
         mBluetoothAdapter = adapter;
-        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_SCANNING);
+    }
 
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        //If we've already Init, then we don't have to start the constant scan again.
+        if(init)
+            return super.onStartCommand(intent, flags, startId);
+        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_SCANNING);
         init = true;
         return super.onStartCommand(intent, flags, startId);
     }
@@ -214,7 +214,6 @@ public class BluetoothLeService extends Service{
                     bleScanner.stopScan(mScanCallback);
                     Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Stopped Scanning");
                     processResults(results);
-                    bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_NEXT_SCAN);
                 }
             }, mConfig.getScanLength());
             return results;
@@ -232,13 +231,14 @@ public class BluetoothLeService extends Service{
                         new RememberingBluetoothGattCallback(result.getDevice());
 
                 QueueItem item = new QueueItem(result.getDevice().getAddress(), Config.UUID_SERVICE_PROFILE,
-                        Config.UUID_CHARACTERISTIC_WRITE, "Hello World!");
+                        Config.UUID_CHARACTERISTIC_WRITE, "{'init':1, 'key':'4C114BA1FBB11'}");
                 sendQueue.add(item);
                 bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
-
                 result.getDevice().connectGatt(
                         getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
+//                bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_STOP_SCANNING);
             }
+            bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_NEXT_SCAN);
             Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Finished Processing Scan results");
         }
     }
@@ -293,13 +293,14 @@ public class BluetoothLeService extends Service{
         final int SEQUENCE_SIZE = 2;
         final int MAX_DATA_SIZE = PACKET_SIZE-INIT_SIZE-SEQUENCE_SIZE;
 
-        ByteBuffer packet = ByteBuffer.allocate(20);
+        ByteBuffer packet = ByteBuffer.allocate(PACKET_SIZE);
         ByteBuffer dataBuffer = ByteBuffer.wrap(value.getBytes());
         int dataLength  = dataBuffer.array().length;
         short numOfPackets = (short) (Math.ceil(dataLength/MAX_DATA_SIZE)+1);
 
         Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "\tCreating packets for " + dataLength + " bytes over " + numOfPackets + " packets");
         for(short i=-1; i<numOfPackets; i++) {
+/*
             if (i == -1) {
                 packet.put((byte) 0x01);
                 packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(numOfPackets).array());
@@ -312,8 +313,9 @@ public class BluetoothLeService extends Service{
                 packet.put(ByteBuffer.allocate(SEQUENCE_SIZE).putShort(i).array());
                 packet.put(sendData);
             }
-
             packets.add(packet.array());
+*/
+            packets.add(value.getBytes());
             packet.clear();
         }
         return packets;
@@ -337,13 +339,14 @@ public class BluetoothLeService extends Service{
             BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(item.getAddress());
 
             //A latch to tell us when we've connected. Once we're connected and have the services, we'll start
-            final CountDownLatch connectionLatch = new CountDownLatch(2);
+            final CountUpAndDownLatch connectionLatch = new CountUpAndDownLatch(3);
 
             //Packets we're going to send
             final ArrayList<byte[]> packets = createPacketsForMessage(item.getMessage(), true);
 
             //This barrier is what allows us to send the next packets after we hear a response from the server
             final CountUpAndDownLatch sendPacketLatch =new CountUpAndDownLatch(packets.size());
+            final int[] mMtu = new int[1];
 
             //Once we've connected, count down the connection latch to continue sending
             BluetoothGattCallback callback = new BluetoothGattCallback() {
@@ -381,25 +384,47 @@ public class BluetoothLeService extends Service{
                     super.onMtuChanged(gatt, mtu, status);
                     if(status == BluetoothGatt.GATT_SUCCESS){
                         Log.d("SendRunnable", "\t\tSuccessfully got a new MTU size of " + mtu);
+                        mMtu[0] = mtu;
                     }
+                    else{
+                        Log.d("SendRunnable", "\t\tCouldn't get our MTU to the size we wanted... " + mtu);
+                    }
+
+                    connectionLatch.countDown();
                 }
             };
 
             BluetoothGatt mGatt = device.connectGatt(getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
-//            boolean usingMTU = mGatt.requestMtu(256);
             //Wait for a state of Connected for 5000 ms. If we won't don't connect, end this;
             try {
-                connectionLatch.await(5000, TimeUnit.MILLISECONDS);
+                connectionLatch.waitUntil(1);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
-            int gattConnectionState = mGatt.getConnectionState(device);
+            boolean usingMTU = mGatt.requestMtu(256);
+            if(usingMTU){
+                Log.d("SendRunnable", "\t\tRequesting to use the MTU");
+            }
+            else{
+                Log.d("SendRunnable", "\t\tCouldn't request to use the MTU");
+            }
+
+            try {
+                connectionLatch.waitUntilZero();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+/*
+            int gattConnectionState = mBluetoothManager.getConnectionState(device, BluetoothProfile.GATT);
             //If we can't connect, we'll return and requeue the message again.
             if(gattConnectionState != BluetoothProfile.STATE_CONNECTED){
+                Log.d(TAG, "\t\tCouldn't connect, going to requeue");
                 sendQueue.add(item);
                 return;
             }
+*/
 
             BluetoothGattService service = mGatt.getService(UUID.fromString(item.getServiceUuid()));
             BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(item.getCharacteristicUuid()));
@@ -407,7 +432,14 @@ public class BluetoothLeService extends Service{
             //We're going to send packets. Wait until we get a response from the last one before sending again.
             for(int i=0; i<packets.size(); i++){
                 characteristic.setValue(packets.get(i));
-                mGatt.writeCharacteristic(characteristic);
+                boolean ableToWrite = mGatt.writeCharacteristic(characteristic);
+                if(ableToWrite){
+                    Log.d(TAG, "\t\tWe were able to write packet " + (i+1));
+                }
+                else{
+                    Log.d(TAG, "\t\tWe failed at writing packet " + (i+1));
+                    continue;
+                }
                 try {
                     sendPacketLatch.waitUntil(packets.size()-i-1);
                 } catch (InterruptedException e) {
