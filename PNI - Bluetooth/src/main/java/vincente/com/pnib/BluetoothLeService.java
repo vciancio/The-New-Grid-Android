@@ -239,6 +239,7 @@ public class BluetoothLeService extends Service{
                 result.getDevice().connectGatt(
                         getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
 //                bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_STOP_SCANNING);
+
             }
             bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_NEXT_SCAN);
             Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Finished Processing Scan results");
@@ -417,16 +418,6 @@ public class BluetoothLeService extends Service{
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
-/*
-            int gattConnectionState = mBluetoothManager.getConnectionState(device, BluetoothProfile.GATT);
-            //If we can't connect, we'll return and requeue the message again.
-            if(gattConnectionState != BluetoothProfile.STATE_CONNECTED){
-                Log.d(TAG, "\t\tCouldn't connect, going to requeue");
-                sendQueue.add(item);
-                return;
-            }
-*/
 
             BluetoothGattService service = mGatt.getService(UUID.fromString(item.getServiceUuid()));
             BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(item.getCharacteristicUuid()));

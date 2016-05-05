@@ -22,6 +22,7 @@ import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
 import android.util.Log;
+import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -62,6 +63,7 @@ public class GattServerService extends Service {
         init = true;
         startGattServer();
         startGattAdvertising();
+        Toast.makeText(getApplicationContext(), "Starting up Gatt Server!", Toast.LENGTH_SHORT).show();
         return super.onStartCommand(intent, flags, startId);
     }
 

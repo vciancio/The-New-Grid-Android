@@ -12,9 +12,9 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Toast;
 
+import vincente.com.multidownloadbluetooth.fragments.ContactThreadFragment;
 import vincente.com.pnib.BluetoothLeService;
 import vincente.com.pnib.GattServerService;
 
@@ -28,7 +28,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_CONTACTS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -44,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
+/*        fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(MainActivity.this, GattServerService.class);
@@ -52,7 +51,9 @@ public class MainActivity extends AppCompatActivity {
                 intent = new Intent(MainActivity.this, BluetoothLeService.class);
                 startService(intent);
             }
-        });
+        });*/
+        getSupportFragmentManager().beginTransaction().add(R.id.content_container,
+                ContactThreadFragment.createInstance()).commit();
     }
 
     @Override
