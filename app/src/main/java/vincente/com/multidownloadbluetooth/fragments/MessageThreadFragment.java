@@ -95,7 +95,6 @@ public class MessageThreadFragment extends ProgressFragment{
         });
 
         // Show indeterminate progress
-        setContentShown(false);
         obtainData();
         return super.onCreateView(inflater, container, savedInstanceState);
     }
