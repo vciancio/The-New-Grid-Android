@@ -19,17 +19,9 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
     private Context context;
     private Cursor cursor;
 
-    private static int CUR_IDX_ID;
-    private static int CUR_IDX_ADDRESS;
-    private static int CUR_IDX_NICKNAME;
-
     public ContactAdapter(Context context, Cursor cursor){
         this.context = context;
         this.cursor = cursor;
-
-        CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
-        CUR_IDX_ADDRESS = cursor.getColumnIndex(DbHelper.KEY_ADDRESS);
-        CUR_IDX_NICKNAME = cursor.getColumnIndex(DbHelper.KEY_NICKNAME);
     }
 
     @Override
@@ -54,6 +46,10 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
         cursor.moveToPosition(position);
+        int CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
+        int CUR_IDX_ADDRESS = cursor.getColumnIndex(DbHelper.KEY_ADDRESS);
+        int CUR_IDX_NICKNAME = cursor.getColumnIndex(DbHelper.KEY_NICKNAME);
+
         String nameFormat = "%s [%s]";
         String nickname = cursor.getString(CUR_IDX_NICKNAME);
         String address = cursor.getString(CUR_IDX_ADDRESS);

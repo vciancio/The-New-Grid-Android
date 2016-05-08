@@ -28,7 +28,6 @@
         </receiver>
 
         <!-- Services -->
-        <service android:name=".InsertScanService"/>
     </application>
 
 </manifest>

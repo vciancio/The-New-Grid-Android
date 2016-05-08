@@ -24,7 +24,7 @@ public class DBUtils {
         DbHelper helper = DbHelper.getInstance(context);
 
         String[] projection = {
-                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS,
+                DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_ADDRESS,
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_NICKNAME,
                 DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_PUBLIC_KEY
         };
