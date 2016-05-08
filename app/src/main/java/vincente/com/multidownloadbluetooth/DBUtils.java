@@ -1,20 +1,26 @@
 package vincente.com.multidownloadbluetooth;
 
+import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
+import android.util.Log;
+
+import java.util.Arrays;
 
 /**
  * Created by vincente on 4/29/16
  */
 public class DBUtils {
 
+
     /**
      * Gets the Users out of the Database
-     *
+     * <p/>
      * Contacts.ADDRESS, Contact.NICKNAME, Seen_Device.Public_Key
      */
-    public static Cursor getUsers(Context context){
+    public static Cursor getUsersCursor(Context context) {
         DbHelper helper = DbHelper.getInstance(context);
 
         String[] projection = {
@@ -23,26 +29,13 @@ public class DBUtils {
                 DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_PUBLIC_KEY
         };
 
-        Cursor c = DbHelper.getInstance(context).getReadableDatabase().rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null);
-
-        if (c.moveToFirst()) {
-            while ( !c.isAfterLast() ) {
-                System.out.println("Table Name=> "+c.getString(0));
-                c.moveToNext();
-            }
-        }
-        else{
-            System.out.println("No tables");
-        }
-
-
-        String selection = DbHelper.TABLE_CONTACT
-                + " outer left join " + DbHelper.TABLE_SEEN_DEVICE + " on"
+        String selection = DbHelper.TABLE_SEEN_DEVICE
+                + " outer left join " + DbHelper.TABLE_CONTACT + " on"
                 + " " + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " = "
                 + DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_ADDRESS;
         System.out.println(selection);
         SQLiteDatabase db = helper.getReadableDatabase();
-        Cursor cursor = db.query(
+        return db.query(
                 selection,
                 projection,
                 null,
@@ -50,18 +43,16 @@ public class DBUtils {
                 null,
                 null,
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_NICKNAME + " DESC, "
-                    + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " DESC"
+                        + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " DESC"
         );
-        return cursor;
     }
 
     /**
      * Get Messages out of the Database for a specific user
-     *
+     * <p/>
      * _id | body | other_address | time_stamp | encrypted | sent_from_me
-     *
      */
-    public static Cursor getMessages(Context context, String otherAddress){
+    public static Cursor getMessages(Context context, String otherAddress) {
         DbHelper helper = DbHelper.getInstance(context);
         /*
         select *
@@ -86,5 +77,41 @@ public class DBUtils {
                 null,
                 orderby
         );
+    }
+
+    public static boolean upsert(Context context, String table, String where,
+                                 String[] whereArgs, ContentValues values) {
+        SQLiteDatabase db = DbHelper.getInstance(context).getWritableDatabase();
+        db.beginTransaction();
+        try {
+            if(upsert(context, db, table, where, whereArgs, values)) {
+                db.setTransactionSuccessful();
+                return true;
+            }
+            else{
+                return false;
+            }
+        } finally {
+            db.endTransaction();
+            db.close();
+        }
+    }
+
+    public static boolean upsert(Context context, SQLiteDatabase db, String table, String where,
+                                 String[] whereArgs, ContentValues values) {
+        try {
+            int rows = db.update(table, values, where, whereArgs);
+            if (rows == 0) {
+                long insert = db.insert(table, null, values);
+                if (insert == -1) {
+                    return false;
+                }
+            }
+        } catch (SQLiteException e) {
+            Log.d("DbUtils", "Failed to update/insert" + table + ", where: " + where + ", " +
+                    Arrays.toString(whereArgs));
+            e.printStackTrace();
+        }
+        return true;
     }
 }

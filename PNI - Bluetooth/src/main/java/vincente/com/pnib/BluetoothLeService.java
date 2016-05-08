@@ -26,6 +26,10 @@ import android.support.annotation.Nullable;
 import android.util.Log;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -175,7 +179,7 @@ public class BluetoothLeService extends Service{
             /* Setting up our Scan so we only have to find other people using our application */
             ScanSettings settings = new ScanSettings.Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
-                    .setMatchMode(ScanSettings.MATCH_MODE_STICKY)
+                    .setMatchMode(ScanSettings.MATCH_MODE_AGGRESSIVE)
                     .build();
 
             final ScanCallback mScanCallback = new ScanCallback() {
@@ -225,6 +229,7 @@ public class BluetoothLeService extends Service{
          * @param results results of a successful scan.
          */
         private void processResults(Set<ScanResult> results) {
+            JSONArray array = new JSONArray();
             for (ScanResult result : results) {
                 //TODO: This is where we store devices!
                 RememberingBluetoothGattCallback callback =
@@ -233,14 +238,26 @@ public class BluetoothLeService extends Service{
                 QueueItem item = new QueueItem(result.getDevice().getAddress(), Config.UUID_SERVICE_PROFILE,
                         Config.UUID_CHARACTERISTIC_WRITE,
                         "{'init':1, 'key':'4C114BA1FBB11'}");
-//                        "Hello World!'");
                 sendQueue.add(item);
                 bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
                 result.getDevice().connectGatt(
                         getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
 //                bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_STOP_SCANNING);
 
+                JSONObject object = new JSONObject();
+                try {
+                    object.put("address", result.getDevice().getAddress());
+                    object.put("public_key",null);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                array.put(object);
             }
+
+            Intent intent = new Intent("com.ftn.intent.SCAN_RESULTS");
+            intent.putExtra("results", array.toString());
+            sendBroadcast(intent);
+
             bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_START_NEXT_SCAN);
             Log.d(ScanNearbyDevicesAsync.class.getSimpleName(), "Finished Processing Scan results");
         }

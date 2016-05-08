@@ -38,7 +38,7 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
         switch(viewType){
             case VIEW_TYPE_CONTACT:
             default:
-                mView = View.inflate(context, R.layout.list_item_message_them, null);
+                mView = View.inflate(context, R.layout.list_item_contact, null);
                 break;
         }
 

@@ -1,5 +1,9 @@
 package vincente.com.multidownloadbluetooth.fragments;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -11,6 +15,7 @@ import android.view.ViewGroup;
 
 import com.devspark.progressfragment.ProgressFragment;
 
+import vincente.com.multidownloadbluetooth.Constants;
 import vincente.com.multidownloadbluetooth.DBUtils;
 import vincente.com.multidownloadbluetooth.R;
 import vincente.com.multidownloadbluetooth.adapters.ContactAdapter;
@@ -21,6 +26,13 @@ import vincente.com.multidownloadbluetooth.adapters.ContactAdapter;
 public class ContactThreadFragment extends ProgressFragment {
 
     private RecyclerView mContentView;
+
+    private BroadcastReceiver scanBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            obtainData();
+        }
+    };
 
     public static ContactThreadFragment createInstance(){
         ContactThreadFragment fragment = new ContactThreadFragment();
@@ -44,6 +56,7 @@ public class ContactThreadFragment extends ProgressFragment {
         mContentView = (RecyclerView) View.inflate(getContext(), R.layout.fragment_devices, null);
         mContentView.setLayoutManager(new LinearLayoutManager(getContext()));
         obtainData();
+        getContext().registerReceiver(scanBroadcastReceiver, new IntentFilter(Constants.ACTION_SCAN_UPDATE));
         return super.onCreateView(inflater, container, savedInstanceState);
     }
 
@@ -52,7 +65,7 @@ public class ContactThreadFragment extends ProgressFragment {
 
             @Override
             protected Cursor doInBackground(Void... params) {
-                return DBUtils.getUsers(getContext());
+                return DBUtils.getUsersCursor(getContext());
             }
 
             @Override
@@ -62,5 +75,17 @@ public class ContactThreadFragment extends ProgressFragment {
                 setContentShown(true);
             }
         }.execute();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        getContext().registerReceiver(scanBroadcastReceiver, new IntentFilter(Constants.ACTION_SCAN_UPDATE));
+    }
+
+    @Override
+    public void onStop() {
+        getContext().unregisterReceiver(scanBroadcastReceiver);
+        super.onStop();
     }
 }
