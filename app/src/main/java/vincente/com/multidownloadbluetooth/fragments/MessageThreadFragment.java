@@ -1,9 +1,14 @@
 package vincente.com.multidownloadbluetooth.fragments;
 
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -21,11 +26,12 @@ import com.devspark.progressfragment.ProgressFragment;
 import vincente.com.multidownloadbluetooth.DBUtils;
 import vincente.com.multidownloadbluetooth.adapters.MessageAdapter;
 import vincente.com.multidownloadbluetooth.R;
+import vincente.com.pnib.BluetoothLeService;
 
 /**
  * Created by vincente on 4/20/16
  */
-public class MessageThreadFragment extends ProgressFragment{
+public class MessageThreadFragment extends ProgressFragment implements ServiceConnection{
     private static final String KEY_OTHER_ADDRESS = "other_address";
     private EditText etMessage;
     private Button btnSend;
@@ -34,6 +40,7 @@ public class MessageThreadFragment extends ProgressFragment{
     private Handler mHandler;
     private String otherAddress;
     private AsyncTask<Void, Void, Cursor> getMessagesAsyc;
+    private BluetoothLeService sendingService;
 
     public static MessageThreadFragment createInstance(String otherAddress){
         Bundle args = new Bundle();
@@ -96,6 +103,8 @@ public class MessageThreadFragment extends ProgressFragment{
 
         // Show indeterminate progress
         obtainData();
+        Intent i = new Intent(getContext(), BluetoothLeService.class);
+        getContext().bindService(i, this, Context.BIND_AUTO_CREATE);
         return super.onCreateView(inflater, container, savedInstanceState);
     }
 
@@ -112,6 +121,9 @@ public class MessageThreadFragment extends ProgressFragment{
 
             @Override
             protected void onPostExecute(Cursor cursor) {
+                if(recyclerView.getAdapter() != null){
+                    ((MessageAdapter) recyclerView.getAdapter()).getCursor().close();
+                }
                 recyclerView.setAdapter(new MessageAdapter(getContext(), cursor));
                 setContentShown(true);
             }
@@ -120,5 +132,32 @@ public class MessageThreadFragment extends ProgressFragment{
 
     public void send(String text){
         Toast.makeText(getContext(), "Sending Message: " + text, Toast.LENGTH_SHORT).show();
+        if(sendingService != null){
+            sendingService.sendMessage(otherAddress, text);
+        }
+    }
+
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        BluetoothLeService.LocalBinder binder = (BluetoothLeService.LocalBinder) service;
+        sendingService = binder.getSendingServiceInstance();
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName name) {
+        sendingService = null;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        Intent i = new Intent(getContext(), BluetoothLeService.class);
+        getContext().bindService(i, this, Context.BIND_AUTO_CREATE);
+    }
+
+    @Override
+    public void onStop() {
+        getContext().unbindService(this);
+        super.onStop();
     }
 }

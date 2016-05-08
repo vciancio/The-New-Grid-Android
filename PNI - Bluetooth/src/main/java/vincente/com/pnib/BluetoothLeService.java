@@ -18,6 +18,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -77,6 +78,11 @@ public class BluetoothLeService extends Service{
      */
     private final Queue<QueueItem> sendQueue;
 
+    /**
+     * A reference to our service so any other thread that binds to it can communicate with it
+     */
+    private IBinder mBinder = new LocalBinder();
+
     public BluetoothLeService() {
         sendQueue = new ConcurrentLinkedQueue<>();
     }
@@ -84,7 +90,7 @@ public class BluetoothLeService extends Service{
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return mBinder;
     }
 
     @Override
@@ -555,7 +561,7 @@ public class BluetoothLeService extends Service{
     /**
      * An Item that is placed into the queue to send to a device.
      */
-    private class QueueItem{
+    private static class QueueItem{
         private String address;
         private String serviceUuid;
         private String characteristicUuid;
@@ -610,5 +616,23 @@ public class BluetoothLeService extends Service{
         public boolean isWrite() {
             return isWrite;
         }
+    }
+
+    public class LocalBinder extends Binder{
+        public BluetoothLeService getSendingServiceInstance(){
+            return BluetoothLeService.this;
+        }
+    }
+
+    /**
+     * Send a Message to a certain device with a given message
+     * @param address Address of the bluetooth device you want to reach
+     * @param message The Message you want to send
+     */
+    public void sendMessage(String address, String message){
+        QueueItem item = new QueueItem(address, Config.UUID_SERVICE_PROFILE,
+                Config.UUID_CHARACTERISTIC_WRITE, message);
+        sendQueue.add(item);
+        bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
     }
 }

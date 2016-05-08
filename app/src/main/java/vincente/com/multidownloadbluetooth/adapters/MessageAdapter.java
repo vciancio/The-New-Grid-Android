@@ -17,13 +17,14 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     private static final int VIEW_TYPE_ME = 0;
     private static final int VIEW_TYPE_THEM = 1;
     private Context context;
+
     private Cursor cursor;
 
     private static int CUR_IDX_ID;
+
     private static int CUR_IDX_BODY;
     private static int CUR_IDX_TIMESTAMP;
     private static int CUR_IDX_SENT_FROM_ME;
-
     public MessageAdapter(Context context, Cursor cursor){
         this.context = context;
         this.cursor = cursor;
@@ -66,6 +67,10 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
         cursor.moveToPosition(position);
         holder.tvBody.setText(cursor.getString(CUR_IDX_BODY));
         holder.tvTimestamp.setText(String.valueOf(cursor.getLong(CUR_IDX_TIMESTAMP)));
+    }
+
+    public Cursor getCursor() {
+        return cursor;
     }
 
     @Override
