@@ -106,7 +106,7 @@ public class BluetoothLeService_proto extends Service{
                 .build();
 
         ParcelUuid mApplicationParcelUUID = new ParcelUuid(UUID.fromString(mConfig.UUID_APPLICATION));
-        ParcelUuid mNameParcelUUID= new ParcelUuid(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME));
+        ParcelUuid mNameParcelUUID= new ParcelUuid(UUID.fromString(Config.UUID_CHARACTERISTIC_FORWARD));
         AdvertiseData advertiseData = new AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .addServiceUuid(mApplicationParcelUUID)
@@ -422,7 +422,7 @@ public class BluetoothLeService_proto extends Service{
                     //TODO: Ask for a Characteristic Read here
                     Log.d(TAG, "Going to try and read characteristics from the device");
                     if(gatt.readCharacteristic(
-                            new BluetoothGattCharacteristic(UUID.fromString(Config.UUID_CHARACTERISTIC_NAME),
+                            new BluetoothGattCharacteristic(UUID.fromString(Config.UUID_CHARACTERISTIC_FORWARD),
                                     BluetoothGattCharacteristic.PROPERTY_READ,
                                     BluetoothGattCharacteristic.PERMISSION_READ)
                     )){

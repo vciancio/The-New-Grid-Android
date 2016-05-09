@@ -33,7 +33,13 @@
         <receiver android:name=".ScanResultReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.ftn.intent.SCAN_RESULTS" />
+                <action android:name="com.ftn.action.SCAN_RESULTS" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".NewMessageReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ftn.action.RECEIVED_MESSAGE"/>
             </intent-filter>
         </receiver>
     </application>

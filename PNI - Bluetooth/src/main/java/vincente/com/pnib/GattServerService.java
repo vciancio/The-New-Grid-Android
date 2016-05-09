@@ -18,6 +18,7 @@ import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.content.Context;
 import android.content.Intent;
 import android.database.CharArrayBuffer;
+import android.os.Binder;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.annotation.Nullable;
@@ -28,7 +29,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +43,7 @@ public class GattServerService extends Service {
     private BluetoothGattServer server;
     private Map<String, Integer> mtuMap;
     private Map<String, CharArrayBuffer> dataBuffer;
+    private ServerBinder binder = new ServerBinder();
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -112,22 +113,21 @@ public class GattServerService extends Service {
                 UUID.fromString(Config.UUID_SERVICE_PROFILE),
                 BluetoothGattService.SERVICE_TYPE_PRIMARY);
 
-        BluetoothGattCharacteristic nameCharacteristic = new BluetoothGattCharacteristic(
-                UUID.fromString(Config.UUID_CHARACTERISTIC_NAME),
-                BluetoothGattCharacteristic.PROPERTY_READ,
-                BluetoothGattCharacteristic.PERMISSION_READ
+        BluetoothGattCharacteristic forwardCharacteristic = new BluetoothGattCharacteristic(
+                UUID.fromString(Config.UUID_CHARACTERISTIC_FORWARD),
+                BluetoothGattCharacteristic.PROPERTY_WRITE,
+                BluetoothGattCharacteristic.PERMISSION_WRITE
         );
-        nameCharacteristic.setValue("TNG");
-
+        forwardCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
         BluetoothGattCharacteristic writeCharacteristic = new BluetoothGattCharacteristic(
-                UUID.fromString(Config.UUID_CHARACTERISTIC_WRITE),
+                UUID.fromString(Config.UUID_CHARACTERISTIC_MESSAGE),
                 BluetoothGattCharacteristic.PROPERTY_WRITE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE
         );
         writeCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
-        profileService.addCharacteristic(nameCharacteristic);
+        profileService.addCharacteristic(forwardCharacteristic);
         profileService.addCharacteristic(writeCharacteristic);
         server.addService(profileService);
         mtuMap = new HashMap<>();
@@ -161,13 +161,7 @@ public class GattServerService extends Service {
         public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset, BluetoothGattCharacteristic characteristic) {
             Log.d(TAG, "Characteristic was read! " + characteristic.getUuid() + ", sending Response");
             byte[] data;
-            switch(characteristic.getUuid().toString()){
-                case Config.UUID_CHARACTERISTIC_NAME:
-                    data = "yo".getBytes();
-                    break;
-                default:
-                    data = "no".getBytes();
-            }
+            data = "yo".getBytes();
             server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, data);
         }
 
@@ -176,12 +170,6 @@ public class GattServerService extends Service {
             Log.d(TAG, "onCharacteristicWriteRequest: offset: " + offset);
             ByteBuffer buffer = ByteBuffer.wrap(value);
 
-            boolean isInitial = buffer.get() != (byte)0x0;
-            short seqNumber = buffer.getShort();
-            //Handle Data
-//            byte data[] = new byte[mtuMap.get(device.getAddress())-offset];
-//            buffer.get(data);
-//            handleWriteRequest(device, isInitial, seqNumber, data);
             Log.d(TAG, "\tReceived data: " + new String(value));
             boolean sentResponse = server.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
             if(sentResponse){
@@ -189,6 +177,23 @@ public class GattServerService extends Service {
             }
             else{
                 Log.d(TAG, "\tCouldn't send a response");
+            }
+
+            //Handle the write request as an incoming message directed towards us.
+            if(characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_MESSAGE)) {
+                //Switch the Address tag in the json to show the sender instead of us as the receiver
+                try {
+                    JSONObject messageJSON = new JSONObject(new String(value));
+                    messageJSON.put(Constants.JSON_KEY_ADDRESS, device.getAddress());
+                    Intent i = new Intent(Constants.ACTION_RECEIVED_MESSAGE);
+                    i.putExtra(Constants.INTENT_EXTRA_RESULTS, messageJSON.toString());
+                    sendBroadcast(i);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+            else if (characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_FORWARD)) {
+                Log.d(TAG, "Got a forward message... idk what to do here...");
             }
         }
 
@@ -204,20 +209,9 @@ public class GattServerService extends Service {
         }
     };
 
-    private void handleWriteRequest(BluetoothDevice device, boolean isInitial, short seqNum, byte[] data){
-        String json = getString(new String[]{"address", "isInitial", "seqNum", "data"}, device.getAddress(), isInitial, seqNum, Arrays.toString(data));
-        Log.d("GattServerService", "Got Write Request: " + json);
-    }
-
-    private String getString(String[] tags, Object... objects){
-        JSONObject jsonObject = new JSONObject();
-        for(int i=0; i<tags.length; i++){
-            try {
-                jsonObject.put(tags[i], objects[i]);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
+    public class ServerBinder extends Binder{
+        public GattServerService getServerService(){
+            return GattServerService.this;
         }
-        return jsonObject.toString();
     }
 }

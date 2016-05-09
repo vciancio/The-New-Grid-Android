@@ -1,8 +1,10 @@
 package vincente.com.multidownloadbluetooth.fragments;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.os.AsyncTask;
@@ -23,10 +25,12 @@ import android.widget.Toast;
 
 import com.devspark.progressfragment.ProgressFragment;
 
+import vincente.com.multidownloadbluetooth.Constants;
 import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
 import vincente.com.multidownloadbluetooth.adapters.MessageAdapter;
 import vincente.com.pnib.BluetoothLeService;
+import vincente.com.pnib.FTNLibrary;
 
 /**
  * Created by vincente on 4/20/16
@@ -39,8 +43,16 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
     private View mContentView;
     private Handler mHandler;
     private String otherAddress;
-    private AsyncTask<Void, Void, Cursor> getMessagesAsyc;
+    private AsyncTask<Void, Void, Cursor> getMessagesAsync;
     private BluetoothLeService sendingService;
+
+    private BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.hasExtra("address") && intent.getStringExtra("address").contentEquals(otherAddress))
+                obtainData();
+        }
+    };
 
     public static MessageThreadFragment createInstance(String otherAddress){
         Bundle args = new Bundle();
@@ -105,15 +117,17 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         obtainData();
         Intent i = new Intent(getContext(), BluetoothLeService.class);
         getContext().bindService(i, this, Context.BIND_AUTO_CREATE);
+        IntentFilter intentFilter = new IntentFilter(Constants.ACTION_MESSAGE_UPDATE);
+        getContext().registerReceiver(receiver, intentFilter);
         return super.onCreateView(inflater, container, savedInstanceState);
     }
 
     private void obtainData(){
-        if(getMessagesAsyc != null && !getMessagesAsyc.isCancelled()){
-            getMessagesAsyc.cancel(true);
+        if(getMessagesAsync != null && !getMessagesAsync.isCancelled()){
+            getMessagesAsync.cancel(true);
         }
 
-        getMessagesAsyc = new AsyncTask<Void, Void, Cursor>() {
+        getMessagesAsync = new AsyncTask<Void, Void, Cursor>() {
             @Override
             protected Cursor doInBackground(Void... params) {
                 return DbHelper.getInstance(getContext()).getMessages(otherAddress);
@@ -135,10 +149,14 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
     public void send(String text){
         Toast.makeText(getContext(), "Sending Message: " + text, Toast.LENGTH_SHORT).show();
         if(sendingService != null){
-            sendingService.sendMessage(otherAddress, text);
+            FTNLibrary.Message message = new FTNLibrary.Message();
+            message.address = otherAddress;
+            message.body = text;
+            message.isEncrypted = false;
+            sendingService.sendMessage(message);
         }
         DbHelper.getInstance(getContext()).addMessage(otherAddress, text, false, true);
-        etMessage.setText("");
+        etMessage.clearComposingText();
         obtainData();
     }
 
@@ -158,11 +176,14 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         super.onResume();
         Intent i = new Intent(getContext(), BluetoothLeService.class);
         getContext().bindService(i, this, Context.BIND_AUTO_CREATE);
+        IntentFilter intentFilter = new IntentFilter(Constants.ACTION_MESSAGE_UPDATE);
+        getContext().registerReceiver(receiver, intentFilter);
     }
 
     @Override
     public void onStop() {
         getContext().unbindService(this);
+        getContext().unregisterReceiver(receiver);
         super.onStop();
     }
 }

@@ -11,8 +11,8 @@ public class Config {
 
     public String UUID_APPLICATION = "fa87c0d0-afac-11de-8a39-0800200c9a66"; // Default UUID of the Application
     public static final String UUID_SERVICE_PROFILE = "e8e11222-0276-11e6-b512-3e1d05defe78";
-    public static final String UUID_CHARACTERISTIC_NAME = "0bc87b4f-0f27-4a53-93ae-52cf788a85aa";
-    public static final String UUID_CHARACTERISTIC_WRITE = "e8e119e8-0276-11e6-b512-3e1d05defe78";
+    public static final String UUID_CHARACTERISTIC_FORWARD = "0bc87b4f-0f27-4a53-93ae-52cf788a85aa";
+    public static final String UUID_CHARACTERISTIC_MESSAGE = "e8e119e8-0276-11e6-b512-3e1d05defe78";
 
     public String UUID_NAME = null;
     private String name = "TheFlash"; // Default Name of the Application

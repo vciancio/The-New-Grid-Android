@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
 //                    startService(intent);
                     Log.d("Permissions", "Permission granted");
                 } else {
-                    Toast.makeText(this, "You need to enable course location to use this libaray", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "You need to enable course location to use this library", Toast.LENGTH_SHORT).show();
                 }
                 break;
             default:
