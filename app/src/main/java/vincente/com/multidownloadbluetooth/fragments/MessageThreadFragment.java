@@ -23,9 +23,9 @@ import android.widget.Toast;
 
 import com.devspark.progressfragment.ProgressFragment;
 
-import vincente.com.multidownloadbluetooth.DBUtils;
-import vincente.com.multidownloadbluetooth.adapters.MessageAdapter;
+import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
+import vincente.com.multidownloadbluetooth.adapters.MessageAdapter;
 import vincente.com.pnib.BluetoothLeService;
 
 /**
@@ -116,15 +116,17 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         getMessagesAsyc = new AsyncTask<Void, Void, Cursor>() {
             @Override
             protected Cursor doInBackground(Void... params) {
-                return DBUtils.getMessages(getContext(), otherAddress);
+                return DbHelper.getInstance(getContext()).getMessages(otherAddress);
             }
 
             @Override
             protected void onPostExecute(Cursor cursor) {
-                if(recyclerView.getAdapter() != null){
-                    ((MessageAdapter) recyclerView.getAdapter()).getCursor().close();
+                if(recyclerView.getAdapter() == null) {
+                    recyclerView.setAdapter(new MessageAdapter(getContext(), cursor));
                 }
-                recyclerView.setAdapter(new MessageAdapter(getContext(), cursor));
+                else{
+                    ((MessageAdapter) recyclerView.getAdapter()).changeCursor(cursor);
+                }
                 setContentShown(true);
             }
         }.execute();
@@ -135,6 +137,9 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         if(sendingService != null){
             sendingService.sendMessage(otherAddress, text);
         }
+        DbHelper.getInstance(getContext()).addMessage(otherAddress, text, false, true);
+        etMessage.setText("");
+        obtainData();
     }
 
     @Override

@@ -479,6 +479,15 @@ public class BluetoothLeService extends Service{
         bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_STOP_SCANNING);
     }
 
+    public String getMyAddress(){
+        if(mBluetoothAdapter != null) {
+            return mBluetoothAdapter.getAddress();
+        }
+        else{
+            return null;
+        }
+    }
+
     /**
      * A Class which allows us to save our connection so we can map the callbacks to the device.
      */

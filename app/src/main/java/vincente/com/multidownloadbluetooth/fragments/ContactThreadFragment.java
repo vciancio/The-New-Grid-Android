@@ -16,7 +16,7 @@ import android.view.ViewGroup;
 import com.devspark.progressfragment.ProgressFragment;
 
 import vincente.com.multidownloadbluetooth.Constants;
-import vincente.com.multidownloadbluetooth.DBUtils;
+import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
 import vincente.com.multidownloadbluetooth.adapters.ContactAdapter;
 
@@ -65,13 +65,20 @@ public class ContactThreadFragment extends ProgressFragment {
 
             @Override
             protected Cursor doInBackground(Void... params) {
-                return DBUtils.getUsersCursor(getContext());
+                return DbHelper.getInstance(getContext()).getUsersCursor();
             }
 
             @Override
             protected void onPostExecute(Cursor cursor) {
                 super.onPostExecute(cursor);
-                mContentView.setAdapter(new ContactAdapter(getContext(), cursor));
+                if(cursor == null)
+                    return;
+                if(mContentView.getAdapter() == null){
+                    mContentView.setAdapter(new ContactAdapter(getContext(), cursor));
+                }
+                else {
+                    ((ContactAdapter) mContentView.getAdapter()).changeCursor(cursor);
+                }
                 setContentShown(true);
             }
         }.execute();
@@ -84,8 +91,8 @@ public class ContactThreadFragment extends ProgressFragment {
     }
 
     @Override
-    public void onStop() {
+    public void onPause() {
         getContext().unregisterReceiver(scanBroadcastReceiver);
-        super.onStop();
+        super.onPause();
     }
 }

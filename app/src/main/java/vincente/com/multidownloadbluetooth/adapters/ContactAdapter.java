@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import vincente.com.multidownloadbluetooth.CursorRecyclerViewAdapter;
 import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
 import vincente.com.multidownloadbluetooth.ThreadActivity;
@@ -16,14 +17,19 @@ import vincente.com.multidownloadbluetooth.ThreadActivity;
 /**
  * Created by vincente on 4/26/16
  */
-public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHolder>{
+public class ContactAdapter extends CursorRecyclerViewAdapter<ContactAdapter.ViewHolder> {
     private static final int VIEW_TYPE_CONTACT = 0;
-    private Context context;
-    private Cursor cursor;
 
-    public ContactAdapter(Context context, Cursor cursor){
+    private Context context;
+
+    public ContactAdapter(Context context, Cursor cursor) {
+        super(context, cursor);
         this.context = context;
-        this.cursor = cursor;
+    }
+
+    @Override
+    public long getItemId(Cursor cursor) {
+        return 0;
     }
 
     @Override
@@ -40,14 +46,12 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
     }
 
     @Override
-    public int getItemViewType(int position) {
-        cursor.moveToPosition(position);
+    public int getItemViewType(Cursor cursor) {
         return VIEW_TYPE_CONTACT;
     }
 
     @Override
-    public void onBindViewHolder(ViewHolder holder, int position) {
-        cursor.moveToPosition(position);
+    public void onBindViewHolder(ViewHolder holder, Cursor cursor) {
         int CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
         int CUR_IDX_ADDRESS = cursor.getColumnIndex(DbHelper.KEY_ADDRESS);
         int CUR_IDX_NICKNAME = cursor.getColumnIndex(DbHelper.KEY_NICKNAME);
@@ -63,11 +67,7 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
 
         holder.ivContactPhoto.setImageResource(R.mipmap.ic_launcher);
         holder.itemView.setOnClickListener(holder);
-    }
 
-    @Override
-    public int getItemCount() {
-        return cursor.getCount();
     }
 
     class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
@@ -79,7 +79,6 @@ public class ContactAdapter extends RecyclerView.Adapter<ContactAdapter.ViewHold
             this.tvName= (TextView) itemView.findViewById(R.id.tv_name);
             this.ivContactPhoto = (ImageView) itemView.findViewById(R.id.iv_contact_photo);
         }
-
 
         @Override
         public void onClick(View v) {

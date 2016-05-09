@@ -3,22 +3,22 @@ package vincente.com.multidownloadbluetooth.adapters;
 import android.content.Context;
 import android.database.Cursor;
 import android.support.v7.widget.RecyclerView;
+import android.text.format.DateUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import vincente.com.multidownloadbluetooth.CursorRecyclerViewAdapter;
 import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
 
 /**
  * Created by vincente on 4/26/16
  */
-public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder>{
+public class MessageAdapter extends CursorRecyclerViewAdapter<MessageAdapter.ViewHolder> {
     private static final int VIEW_TYPE_ME = 0;
     private static final int VIEW_TYPE_THEM = 1;
     private Context context;
-
-    private Cursor cursor;
 
     private static int CUR_IDX_ID;
 
@@ -26,13 +26,18 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     private static int CUR_IDX_TIMESTAMP;
     private static int CUR_IDX_SENT_FROM_ME;
     public MessageAdapter(Context context, Cursor cursor){
+        super(context, cursor);
         this.context = context;
-        this.cursor = cursor;
 
         CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
         CUR_IDX_BODY = cursor.getColumnIndex(DbHelper.KEY_BODY);
         CUR_IDX_TIMESTAMP = cursor.getColumnIndex(DbHelper.KEY_TIMESTAMP);
         CUR_IDX_SENT_FROM_ME = cursor.getColumnIndex(DbHelper.KEY_SENT_FROM_ME);
+    }
+
+    @Override
+    public long getItemId(Cursor cursor) {
+        return 0;
     }
 
     @Override
@@ -52,8 +57,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     }
 
     @Override
-    public int getItemViewType(int position) {
-        cursor.moveToPosition(position);
+    public int getItemViewType(Cursor cursor) {
         if(cursor.getInt(CUR_IDX_SENT_FROM_ME)==1){
             return VIEW_TYPE_ME;
         }
@@ -63,19 +67,9 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     }
 
     @Override
-    public void onBindViewHolder(ViewHolder holder, int position) {
-        cursor.moveToPosition(position);
+    public void onBindViewHolder(ViewHolder holder, Cursor cursor) {
         holder.tvBody.setText(cursor.getString(CUR_IDX_BODY));
-        holder.tvTimestamp.setText(String.valueOf(cursor.getLong(CUR_IDX_TIMESTAMP)));
-    }
-
-    public Cursor getCursor() {
-        return cursor;
-    }
-
-    @Override
-    public int getItemCount() {
-        return cursor.getCount();
+        holder.tvTimestamp.setText(DateUtils.getRelativeTimeSpanString(Long.valueOf(String.valueOf(cursor.getLong(CUR_IDX_TIMESTAMP)))));
     }
 
     class ViewHolder extends RecyclerView.ViewHolder{

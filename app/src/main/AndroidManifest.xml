@@ -15,7 +15,8 @@
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
-            android:theme="@style/AppTheme.NoActionBar">
+            android:theme="@style/AppTheme.NoActionBar"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -23,17 +24,17 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".ScanResultReceiver">
+        <activity
+            android:name=".ThreadActivity"
+            android:label="@string/title_activity_thread"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:screenOrientation="portrait"/>
+
+        <receiver android:name=".ScanResultReceiver"
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.ftn.intent.SCAN_RESULTS" />
             </intent-filter>
         </receiver>
-
-        <!-- Services -->
-        <activity
-            android:name=".ThreadActivity"
-            android:label="@string/title_activity_thread"
-            android:theme="@style/AppTheme.NoActionBar"></activity>
     </application>
-
 </manifest>
