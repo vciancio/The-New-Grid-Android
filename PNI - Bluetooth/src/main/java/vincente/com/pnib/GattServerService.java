@@ -40,7 +40,7 @@ public class GattServerService extends Service {
     private boolean init = false;
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothManager mBluetoothManager;
-    private BluetoothGattServer server;
+    public BluetoothGattServer server;
     private Map<String, Integer> mtuMap;
     private Map<String, CharArrayBuffer> dataBuffer;
     private ServerBinder binder = new ServerBinder();

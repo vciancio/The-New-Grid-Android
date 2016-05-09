@@ -64,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
                     Intent intent = new Intent(this, BluetoothLeService.class);
                     startService(intent);
                     intent = new Intent(MainActivity.this, GattServerService.class);
-//                    startService(intent);
+                    startService(intent);
                     Log.d("Permissions", "Permission granted");
                 } else {
                     Toast.makeText(this, "You need to enable course location to use this library", Toast.LENGTH_SHORT).show();

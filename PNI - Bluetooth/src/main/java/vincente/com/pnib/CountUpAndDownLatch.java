@@ -38,12 +38,16 @@ public class CountUpAndDownLatch {
         }
     }
 
-    public void waitUntilZero() throws InterruptedException {
-        synchronized(lock) {
-            while(latch.getCount() != 0) {
-                lock.wait();
+    public void waitUntil(int i, long timeout) throws InterruptedException {
+        synchronized (lock){
+            if(latch.getCount() > i){
+                lock.wait(timeout);
             }
         }
+    }
+
+    public void waitUntilZero() throws InterruptedException {
+        waitUntil(0);
     }
 
     public void countUp() { //should probably check for Integer.MAX_VALUE

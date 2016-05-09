@@ -19,7 +19,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
     // All Static variables
     // Database Version
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 1;
 
     // Database Name
     private static final String DATABASE_NAME = "FTNDatabase.db";
@@ -182,7 +182,7 @@ public class DbHelper extends SQLiteOpenHelper {
                 + " outer left join " + DbHelper.TABLE_CONTACT + " on"
                 + " " + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " = "
                 + DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_ADDRESS;
-        System.out.println(selection);
+//        System.out.println(selection);
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query(
                 selection,
