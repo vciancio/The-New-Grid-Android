@@ -17,7 +17,7 @@ public class ThreadActivity extends AppCompatActivity {
 
         getSupportFragmentManager().beginTransaction().add(
                 R.id.content_container,
-                MessageThreadFragment.createInstance(getIntent().getStringExtra(DbHelper.KEY_ADDRESS))
+                MessageThreadFragment.createInstance(getIntent().getStringExtra("uuid"))
         ).commit();
     }
 }

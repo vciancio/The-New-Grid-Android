@@ -36,27 +36,27 @@ import vincente.com.pnib.FTNLibrary;
  * Created by vincente on 4/20/16
  */
 public class MessageThreadFragment extends ProgressFragment implements ServiceConnection{
-    private static final String KEY_OTHER_ADDRESS = "other_address";
+    private static final String KEY_OTHER_UUID = "other_uuid";
     private EditText etMessage;
     private Button btnSend;
     private RecyclerView recyclerView;
     private View mContentView;
     private Handler mHandler;
-    private String otherAddress;
+    private String otherUUID;
     private AsyncTask<Void, Void, Cursor> getMessagesAsync;
     private BluetoothLeService sendingService;
 
     private BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if(intent.hasExtra("address") && intent.getStringExtra("address").contentEquals(otherAddress))
+            if(intent.hasExtra("uuid") && intent.getStringExtra("uuid").contentEquals(otherUUID))
                 obtainData();
         }
     };
 
-    public static MessageThreadFragment createInstance(String otherAddress){
+    public static MessageThreadFragment createInstance(String otherUUID){
         Bundle args = new Bundle();
-        args.putString(KEY_OTHER_ADDRESS, otherAddress);
+        args.putString(KEY_OTHER_UUID, otherUUID);
         MessageThreadFragment fragment = new MessageThreadFragment();
         fragment.setArguments(args);
         return fragment;
@@ -76,7 +76,7 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Bundle arguments = getArguments();
-        otherAddress = arguments.getString(KEY_OTHER_ADDRESS);
+        otherUUID = arguments.getString(KEY_OTHER_UUID);
     }
 
     @Nullable
@@ -130,7 +130,7 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         getMessagesAsync = new AsyncTask<Void, Void, Cursor>() {
             @Override
             protected Cursor doInBackground(Void... params) {
-                return DbHelper.getInstance(getContext()).getMessages(otherAddress);
+                return DbHelper.getInstance(getContext()).getMessages(otherUUID);
             }
 
             @Override
@@ -150,12 +150,14 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         Toast.makeText(getContext(), "Sending Message: " + text, Toast.LENGTH_SHORT).show();
         if(sendingService != null){
             FTNLibrary.Message message = new FTNLibrary.Message();
-            message.address = otherAddress;
+            message.address = DbHelper.getInstance(getContext()).getAddress(otherUUID);
+            message.uuid = otherUUID;
             message.body = text;
             message.isEncrypted = false;
+
             sendingService.sendMessage(message);
         }
-        DbHelper.getInstance(getContext()).addMessage(otherAddress, text, false, true);
+        DbHelper.getInstance(getContext()).addMessage(otherUUID, text, false, true);
         etMessage.clearComposingText();
         obtainData();
     }

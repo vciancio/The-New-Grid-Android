@@ -2,7 +2,9 @@ package vincente.com.pnib;
 
 import android.bluetooth.BluetoothDevice;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.UUID;
 
 /**
  * Created by vincente on 3/10/16
@@ -22,7 +24,7 @@ public class Config {
     private boolean isDebugging = false;
     private static Config instance = null;
     private ArrayList<BluetoothDevice> knownDevices;
-
+    private String personal_uuid;
     private Config(){
         knownDevices = new ArrayList<>();
     }
@@ -94,6 +96,31 @@ public class Config {
             knownDevices.add(device);
         }
         return true;
+    }
+
+    public String getPersonal_uuid() {
+        return personal_uuid;
+    }
+
+    public void setPersonal_uuid(String personal_uuid) {
+        this.personal_uuid = personal_uuid;
+    }
+
+    public static byte[] generateUUID(){
+        UUID uuid = UUID.randomUUID();
+        ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
+        bb.putLong(uuid.getMostSignificantBits());
+        bb.putLong(uuid.getLeastSignificantBits());
+        return bb.array();
+    }
+
+    public static byte[] bytesFromString(String string) {
+        String[] strings = string.replace("[", "").replace("]", "").split(", ");
+        byte result[] = new byte[strings.length];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = Byte.valueOf(strings[i]);
+        }
+        return result;
     }
 
 }

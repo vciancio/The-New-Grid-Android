@@ -15,6 +15,7 @@ public class FTNLibrary {
 
     public static class Message{
         public String body;
+        public String uuid;
         public String address;
         public boolean isEncrypted;
 
@@ -23,6 +24,7 @@ public class FTNLibrary {
             JSONObject object = new JSONObject();
             try {
                 object.put(Constants.JSON_KEY_BODY, body);
+                object.put(Constants.JSON_KEY_UUID, uuid);
                 object.put(Constants.JSON_KEY_ADDRESS, address);
                 object.put(Constants.JSON_KEY_ENCRYPTED, isEncrypted);
             } catch (JSONException e) {

@@ -17,10 +17,12 @@ import android.bluetooth.le.AdvertiseSettings;
 import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.CharArrayBuffer;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.ParcelUuid;
+import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.util.Log;
 import android.widget.Toast;
@@ -29,6 +31,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -51,9 +54,20 @@ public class GattServerService extends Service {
     }
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        //If we don't have our own uuid yet, we need to set one!
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        if(!preferences.contains(Constants.PREF_MY_UUID)){
+            preferences.edit().putString(Constants.PREF_MY_UUID, Arrays.toString(Config.generateUUID())).commit();
+        }
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if(init)
             return super.onStartCommand(intent, flags, startId);
+
         mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if(!mBluetoothAdapter.isEnabled() && !mBluetoothAdapter.enable()){
@@ -80,10 +94,19 @@ public class GattServerService extends Service {
                 .setConnectable(true)
                 .build();
 
+        //Get our own uuid
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+
+        byte myUUID[] = Config.bytesFromString(
+                sp.getString(Constants.PREF_MY_UUID, Arrays.toString(Config.generateUUID())));
+
         ParcelUuid mApplicationParcelUUID = new ParcelUuid(UUID.fromString(Config.getInstance().UUID_APPLICATION));
         AdvertiseData advertiseData = new AdvertiseData.Builder()
                 .setIncludeDeviceName(false)
                 .addServiceUuid(mApplicationParcelUUID)
+                .build();
+        AdvertiseData scanResponseData = new AdvertiseData.Builder()
+                .addManufacturerData(Constants.ID_MANUFACTURER, myUUID)
                 .build();
         AdvertiseCallback advertiseCallback = new AdvertiseCallback() {
             @Override
@@ -99,7 +122,7 @@ public class GattServerService extends Service {
             }
         };
 
-        advertiser.startAdvertising(settings, advertiseData, advertiseCallback);
+        advertiser.startAdvertising(settings, advertiseData, scanResponseData, advertiseCallback);
     }
 
     /**

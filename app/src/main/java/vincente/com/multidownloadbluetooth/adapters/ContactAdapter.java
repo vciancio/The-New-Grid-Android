@@ -9,10 +9,13 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import java.util.UUID;
+
 import vincente.com.multidownloadbluetooth.CursorRecyclerViewAdapter;
 import vincente.com.multidownloadbluetooth.DbHelper;
 import vincente.com.multidownloadbluetooth.R;
 import vincente.com.multidownloadbluetooth.ThreadActivity;
+import vincente.com.pnib.Config;
 
 /**
  * Created by vincente on 4/26/16
@@ -53,25 +56,24 @@ public class ContactAdapter extends CursorRecyclerViewAdapter<ContactAdapter.Vie
     @Override
     public void onBindViewHolder(ViewHolder holder, Cursor cursor) {
         int CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
-        int CUR_IDX_ADDRESS = cursor.getColumnIndex(DbHelper.KEY_ADDRESS);
+        int CUR_IDX_UUID = cursor.getColumnIndex(DbHelper.KEY_UUID);
         int CUR_IDX_NICKNAME = cursor.getColumnIndex(DbHelper.KEY_NICKNAME);
 
         String nameFormat = "%s [%s]";
         String nickname = cursor.getString(CUR_IDX_NICKNAME);
-        holder.address = cursor.getString(CUR_IDX_ADDRESS);
+        holder.uuid = cursor.getString(CUR_IDX_UUID);
         holder.tvName.setText(String.format(
                 nameFormat,
                 nickname == null ? "" : nickname,
-                holder.address
+                UUID.nameUUIDFromBytes(Config.bytesFromString(holder.uuid))
         ));
 
         holder.ivContactPhoto.setImageResource(R.mipmap.ic_launcher);
         holder.itemView.setOnClickListener(holder);
-
     }
 
     class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
-        public String address;
+        public String uuid;
         public TextView tvName;
         public ImageView ivContactPhoto;
         public ViewHolder(View itemView) {
@@ -83,7 +85,7 @@ public class ContactAdapter extends CursorRecyclerViewAdapter<ContactAdapter.Vie
         @Override
         public void onClick(View v) {
             Intent i = new Intent(context, ThreadActivity.class);
-            i.putExtra(DbHelper.KEY_ADDRESS, address);
+            i.putExtra("uuid", uuid);
             context.startActivity(i);
         }
     }

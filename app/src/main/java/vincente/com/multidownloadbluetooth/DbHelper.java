@@ -33,6 +33,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public static final String KEY_ADDRESS      = "address";
     public static final String KEY_NICKNAME     = "nickname";
     public static final String KEY_ID           = "_id";
+    public static final String KEY_UUID        = "uuid";
     public static final String KEY_BODY         = "body";
     public static final String KEY_TIMESTAMP    = "time_stamp";
     public static final String KEY_ENCRYPTED    = "encrypted";
@@ -54,6 +55,7 @@ public class DbHelper extends SQLiteOpenHelper {
     // Creating Tables
     @Override
     public void onCreate(SQLiteDatabase db) {
+/*
         String CREATE_SEEN_TABLE =
                 "CREATE TABLE SEENDEVICE\n" +
                 "  ( \n" +
@@ -61,24 +63,27 @@ public class DbHelper extends SQLiteOpenHelper {
                 "  public_key text default null \n" +
                 "  );\n" +
                 "\n";
+*/
         String CREATE_CONTACTS_TABLE =
                 "CREATE TABLE CONTACT ( \n" +
-                "  address text not null primary key, \n" +
-                "  nickname text\n" +
-                ");\n" +
-                "\n";
+                        " uuid text not null primary key, \n" +
+                        " address text not null, \n" +
+                        " public_key text default null, \n" +
+                        " nickname text\n" +
+                        ");\n";
+
         String CREATE_MESSAGE_TABLE =
                 "CREATE TABLE MESSAGE (\n" +
-                "  _id integer not null primary key autoincrement,\n" +
-                "  body text not null, \n" +
-                "  address text not null,\n" +
-                "  time_stamp numeric not null,\n" +
-                "  encrypted integer not null default 0,\n" +
-                "  sent_from_me integer not null default 0\n" +
-                ");";
+                        "  _id integer not null primary key autoincrement,\n" +
+                        "  body text not null, \n" +
+                        "  uuid text not null,\n" +
+                        "  time_stamp numeric not null,\n" +
+                        "  encrypted integer not null default 0,\n" +
+                        "  sent_from_me integer not null default 0\n" +
+                        ");";
         System.out.println(CREATE_CONTACTS_TABLE);
         try{
-            db.execSQL(CREATE_SEEN_TABLE);
+//            db.execSQL(CREATE_SEEN_TABLE);
             db.execSQL(CREATE_CONTACTS_TABLE);
             db.execSQL(CREATE_MESSAGE_TABLE);
         } catch (Exception e){
@@ -92,7 +97,7 @@ public class DbHelper extends SQLiteOpenHelper {
         // Drop older table if existed
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_CONTACT);
         db.execSQL("DROP Table IF Exists " + TABLE_MESSAGE);
-        db.execSQL("DROP Table IF Exists " + TABLE_SEEN_DEVICE);
+//        db.execSQL("DROP Table IF Exists " + TABLE_SEEN_DEVICE);
 
         // Create tables again
         onCreate(db);
@@ -110,7 +115,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public boolean addressExists(String address){
         Cursor cursor = null;
         try {
-            cursor = getReadableDatabase().query(TABLE_SEEN_DEVICE, null,
+            cursor = getReadableDatabase().query(TABLE_CONTACT, null,
                     KEY_ADDRESS + "=" + DatabaseUtils.sqlEscapeString(address), null, null, null, null);
             return cursor.getCount() > 0;
         } finally {
@@ -121,47 +126,61 @@ public class DbHelper extends SQLiteOpenHelper {
 
     /**
      * Adds an address to the database when we see it
+     * @param uuid
      * @param address
      * @return
      */
-    public boolean addAddress(String address){
-        if(addressExists(address)){
-            return false;
-        }
+    public boolean addAddress(String uuid, String address){
         SQLiteDatabase db = getWritableDatabase();
+/*
         SQLiteStatement knownDevicesStatement =
                 db.compileStatement(
                         "INSERT INTO " + DbHelper.TABLE_SEEN_DEVICE
                                 + "(" + DbHelper.KEY_ADDRESS + ")"
                                 + " VALUES (" + DatabaseUtils.sqlEscapeString(address) + ");");
+*/
         SQLiteStatement contactStatement =
                 db.compileStatement(
                         "INSERT INTO " + DbHelper.TABLE_CONTACT
-                                + "(" + DbHelper.KEY_ADDRESS + ")"
-                                + " VALUES (" + DatabaseUtils.sqlEscapeString(address) + ");");
+                                + "(" + DbHelper.KEY_ADDRESS + ", " + KEY_UUID + ") "
+                                + "VALUES (" + DatabaseUtils.sqlEscapeString(address) + ", "
+                                + DatabaseUtils.sqlEscapeString(uuid) + ");");
+        SQLiteStatement updateStatement = db.compileStatement(
+                "UPDATE " + DbHelper.TABLE_CONTACT + "\n"
+                        + "SET " + DbHelper.KEY_ADDRESS + "=" + DatabaseUtils.sqlEscapeString(address) + "\n"
+                        + "WHERE " + KEY_UUID + "=" + DatabaseUtils.sqlEscapeString(uuid) + ";");
+
         db.beginTransaction();
-        if (knownDevicesStatement.executeInsert()>0 && contactStatement.executeInsert()>0) {
-            db.setTransactionSuccessful();
+        //Essentially an upsert
+        try {
+            if (updateStatement.executeUpdateDelete() > 0) {
+                db.setTransactionSuccessful();
+            } else if (contactStatement.executeInsert() != -1) {
+                db.setTransactionSuccessful();
+            } else {
+                return false;
+            }
+        } finally {
+            db.endTransaction();
         }
-        db.endTransaction();
         return true;
     }
 
     /**
      * Insert a message into our database
-     * @param otherAddress
+     * @param otherUUID
      * @param message
      * @param encrypted
      * @param fromMe
      * @return
      */
-    public long addMessage(String otherAddress, String message, boolean encrypted, boolean fromMe){
+    public long addMessage(String otherUUID, String message, boolean encrypted, boolean fromMe){
         SQLiteDatabase db = getWritableDatabase();
         SQLiteStatement statement = db.compileStatement(
-                "INSERT INTO " + TABLE_MESSAGE + " (" + KEY_BODY + ", " + KEY_ADDRESS + ", " +
+                "INSERT INTO " + TABLE_MESSAGE + " (" + KEY_BODY + ", " + KEY_UUID + ", " +
                         KEY_TIMESTAMP + ", " + KEY_ENCRYPTED + ", " + KEY_SENT_FROM_ME + ") " +
-                        "VALUES (" + DatabaseUtils.sqlEscapeString(message) + ", " + DatabaseUtils.sqlEscapeString(otherAddress) + ", " +
-                        System.currentTimeMillis() + ", " + (encrypted?1:0) + ", " + (fromMe?1:0) + ");");
+                        "VALUES (" + DatabaseUtils.sqlEscapeString(message) + ", " + DatabaseUtils.sqlEscapeString(otherUUID) + ", " +
+                        System.currentTimeMillis() + ", " + (encrypted ? 1 : 0) + ", " + (fromMe ? 1 : 0) + ");");
         return statement.executeInsert();
     }
 
@@ -173,16 +192,13 @@ public class DbHelper extends SQLiteOpenHelper {
     public Cursor getUsersCursor() {
 
         String[] projection = {
-                DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_ADDRESS,
+                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_UUID,
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_NICKNAME,
-                DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_PUBLIC_KEY
+                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_PUBLIC_KEY
         };
 
-        String selection = DbHelper.TABLE_SEEN_DEVICE
-                + " outer left join " + DbHelper.TABLE_CONTACT + " on"
-                + " " + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " = "
-                + DbHelper.TABLE_SEEN_DEVICE + "." + DbHelper.KEY_ADDRESS;
-//        System.out.println(selection);
+        String selection = DbHelper.TABLE_CONTACT;
+
         SQLiteDatabase db = this.getReadableDatabase();
         return db.query(
                 selection,
@@ -192,7 +208,7 @@ public class DbHelper extends SQLiteOpenHelper {
                 null,
                 null,
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_NICKNAME + " DESC, "
-                        + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_ADDRESS + " DESC"
+                        + DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_UUID + " DESC"
         );
     }
 
@@ -201,7 +217,7 @@ public class DbHelper extends SQLiteOpenHelper {
      * <p/>
      * _id | body | other_address | time_stamp | encrypted | sent_from_me
      */
-    public Cursor getMessages(String otherAddress) {
+    public Cursor getMessages(String otherUUID) {
         /*
         select *
                 from message as cur
@@ -213,22 +229,53 @@ public class DbHelper extends SQLiteOpenHelper {
         */
         String from = "message as cur";
         String[] columns = {"*"};
-        String selection = DbHelper.KEY_ADDRESS + "=?";
-        String[] selectionArgs = {otherAddress};
+        String selection = DbHelper.KEY_UUID + "=" + DatabaseUtils.sqlEscapeString(otherUUID);
         String orderby = DbHelper.KEY_TIMESTAMP + " asc";
         return this.getReadableDatabase().query(
                 from,
                 columns,
                 selection,
-                selectionArgs,
+                null,
                 null,
                 null,
                 orderby
         );
     }
 
+    /**
+     * Get the address based off of a device's uuid
+     * @param uuid
+     * @return
+     */
+    public String getAddress(String uuid){
+        SQLiteDatabase db = getReadableDatabase();
+
+        String[] columns = {KEY_ADDRESS};
+        Cursor cursor = null;
+        try {
+            cursor = db.query(
+                    TABLE_CONTACT,
+                    columns,
+                    KEY_UUID + "=" + DatabaseUtils.sqlEscapeString(uuid),
+                    null,
+                    null,
+                    null,
+                    null
+            );
+            if (cursor.moveToFirst()) {
+                return cursor.getString(cursor.getColumnIndex(KEY_ADDRESS));
+            } else {
+                return null;
+            }
+        }finally {
+            if(cursor != null){
+                cursor.close();
+            }
+        }
+    }
+
     public boolean upsert(String table, String where,
-                                 String[] whereArgs, ContentValues values) {
+                          String[] whereArgs, ContentValues values) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.beginTransaction();
         try {
@@ -245,7 +292,7 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     private boolean upsert(SQLiteDatabase db, String table, String where,
-                                 String[] whereArgs, ContentValues values) {
+                           String[] whereArgs, ContentValues values) {
         try {
             int rows = db.update(table, values, where, whereArgs);
             if (rows == 0) {

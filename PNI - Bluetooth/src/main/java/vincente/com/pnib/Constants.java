@@ -7,16 +7,20 @@ public class Constants {
 
 
 
-
     private Constants(){}
 
     public static final String INTENT_EXTRA_RESULTS = "results";
 
     public static final String JSON_KEY_BODY = "body";
+    public static final String JSON_KEY_UUID = "uuid";
     public static final String JSON_KEY_ADDRESS = "address";
     public static final String JSON_KEY_FORWARD = "isForward";
     public static final String JSON_KEY_ENCRYPTED = "encrypted";
     public static final String JSON_KEY_PUBLIC_KEY = "public_key";
+
+    public static final String PREF_MY_UUID = "mUUID";
+
+    public static final int ID_MANUFACTURER = 3309;
 
     /**
      * Broadcasts the Results of the Scan. It is up to the App dev to determine what to do with them

@@ -34,7 +34,8 @@ public class ScanResultReceiver extends BroadcastReceiver {
             for (int i = 0; i < results.length(); i++) {
                 JSONObject object = (JSONObject) results.get(i);
                 String address = object.getString("address");
-                DbHelper.getInstance(context).addAddress(address);
+                String uuid = object.getString("uuid");
+                DbHelper.getInstance(context).addAddress(uuid, address);
             }
         } catch (JSONException e) {
             e.printStackTrace();
