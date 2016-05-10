@@ -33,8 +33,8 @@ public class ScanResultReceiver extends BroadcastReceiver {
         try {
             for (int i = 0; i < results.length(); i++) {
                 JSONObject object = (JSONObject) results.get(i);
-                String address = object.getString("address");
-                String uuid = object.getString("uuid");
+                String address = object.getString(vincente.com.pnib.Constants.JSON_KEY_ADDRESS);
+                String uuid = object.getString(vincente.com.pnib.Constants.JSON_KEY_UUID);
                 DbHelper.getInstance(context).addAddress(uuid, address);
             }
         } catch (JSONException e) {

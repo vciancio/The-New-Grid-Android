@@ -17,7 +17,7 @@ public class NewMessageReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         try {
             JSONObject object = new JSONObject(intent.getStringExtra("results"));
-            String uuid = object.getString(Constants.JSON_KEY_UUID);
+            String uuid = object.getString(Constants.JSON_KEY_FROM_UUID);
             String address = object.getString(Constants.JSON_KEY_ADDRESS);
             String message = object.getString(Constants.JSON_KEY_BODY);
             boolean encrypted = object.getBoolean(Constants.JSON_KEY_ENCRYPTED);

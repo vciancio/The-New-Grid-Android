@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
         });*/
         getSupportFragmentManager().beginTransaction().add(R.id.content_container,
                 ContactThreadFragment.createInstance()).commit();
+
     }
 
     @Override

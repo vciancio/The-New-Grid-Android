@@ -14,17 +14,19 @@ import java.util.ArrayList;
 public class FTNLibrary {
 
     public static class Message{
-        public String body;
-        public String uuid;
-        public String address;
-        public boolean isEncrypted;
+        public String body = null;
+        public String toUUID = null;
+        public String fromUUID = null;
+        public String address = null;
+        public boolean isEncrypted = false;
 
         @Override
         public String toString() {
             JSONObject object = new JSONObject();
             try {
                 object.put(Constants.JSON_KEY_BODY, body);
-                object.put(Constants.JSON_KEY_UUID, uuid);
+                object.put(Constants.JSON_KEY_TO_UUID, toUUID);
+                object.put(Constants.JSON_KEY_FROM_UUID, fromUUID);
                 object.put(Constants.JSON_KEY_ADDRESS, address);
                 object.put(Constants.JSON_KEY_ENCRYPTED, isEncrypted);
             } catch (JSONException e) {

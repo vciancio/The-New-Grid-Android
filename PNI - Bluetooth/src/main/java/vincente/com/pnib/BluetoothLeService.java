@@ -38,13 +38,14 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by vincente on 4/12/16
@@ -88,6 +89,9 @@ public class BluetoothLeService extends Service{
      */
     private IBinder mBinder = new LocalBinder();
 
+    private Map<byte[], BluetoothGatt> bluetoothGattMap = new IdentityHashMap<>();
+    private String mUUID;
+
     public BluetoothLeService() {
         sendQueue = new ConcurrentLinkedQueue<>();
     }
@@ -106,6 +110,7 @@ public class BluetoothLeService extends Service{
         if(!preferences.contains(Constants.PREF_MY_UUID)){
             preferences.edit().putString(Constants.PREF_MY_UUID, Arrays.toString(Config.generateUUID())).commit();
         }
+        mUUID = preferences.getString(Constants.PREF_MY_UUID, "0");
 
         bleServiceHandler = new BleServiceHandler(this);
         mBluetoothManager = (BluetoothManager) getSystemService(BLUETOOTH_SERVICE);
@@ -328,7 +333,7 @@ public class BluetoothLeService extends Service{
 
 
                     //Get the Device Reference we want to talk to.
-                    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(item.getMessage().address);
+                    final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(item.getMessage().address);
 
                     //Packets we're going to send
                     final ArrayList<byte[]> packets = FTNLibrary.createPacketsForMessage(item.getMessage().toString(), true);
@@ -343,19 +348,29 @@ public class BluetoothLeService extends Service{
                     final int[] mMtu = new int[1];
 
                     //Once we've connected, count down the connection latch to continue sending
-                    BluetoothGattCallback callback = new BluetoothGattCallback() {
+                    final BluetoothGattCallback callback = new BluetoothGattCallback() {
                         @Override
                         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                             super.onConnectionStateChange(gatt, status, newState);
                             if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
                                 Log.d(TAG, "\t\tConnected to: " + gatt.getDevice().getAddress());
                                 connectionLatch.countDown();
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
                                 gatt.discoverServices();
-                            } else {
-                                Log.d(TAG, "\t\tCouldn't connect to device, going to requeue as " +
-                                        "forwarding, newState: " + newState + ", status: " + status);
-                                //TODO: Get a way to resend the message as a forwarding message from here
+                            } else if(newState == BluetoothProfile.STATE_DISCONNECTED){
+                                Log.e(TAG, "\t\tRandomly disconnected... status: " + status);
+                                connectionLatch.countDown();
+                                connectionLatch.countDown();
+                            }
+                            else{
+                                Log.wtf(TAG, "I have no idea what happened... status=" + status + ", newState=" + newState);
                                 item.setErrorSendFlag(true);
+                                connectionLatch.countDown();
+                                connectionLatch.countDown();
                             }
                         }
 
@@ -368,7 +383,6 @@ public class BluetoothLeService extends Service{
                             } else {
                                 Log.e(TAG, "\t\tCouldn't obtain Services... " + status);
                                 connectionLatch.countDown();
-                                gatt.close();
                             }
                         }
 
@@ -393,21 +407,34 @@ public class BluetoothLeService extends Service{
                                 Log.d("SendRunnable", "\t\tSuccessfully got a new MTU size of " + mtu);
                                 mMtu[0] = mtu;
                             } else {
-                                Log.d("SendRunnable", "\t\tCouldn't get our MTU to the size we wanted... " + mtu);
+                                Log.e("SendRunnable", "\t\tCouldn't get our MTU to the size we wanted... " + mtu);
                                 mMtu[0] = mtu;
                             }
                             mtuLatch.countDown();
                         }
-
                     };
 
-                    mGatt = device.connectGatt(getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
+                    byte[] uuid = Config.bytesFromString(item.getMessage().toUUID);
+                    mBluetoothAdapter.cancelDiscovery();
+                    if(!bluetoothGattMap.containsKey(uuid)){
+                        mGatt = device.connectGatt(getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
+                        bluetoothGattMap.put(uuid, mGatt);
+                    }
+                    else{
+                        mGatt = bluetoothGattMap.get(uuid);
+                        mGatt.connect();
+                    }
 
                     //Wait for a state of Connected for 5000 ms. If we won't don't connect, end this;
                     try {
-                        connectionLatch.await(5000, TimeUnit.MILLISECONDS);
+                        connectionLatch.await();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
+                    }
+
+                    if(connectionLatch.getCount() != 0 || item.isErrorSendFlag()){
+                        resetQueuedItem(item);
+                        return;
                     }
                     if (mMtu[0] != 256) {
                         boolean usingMTU = mGatt.requestMtu(256);
@@ -421,15 +448,14 @@ public class BluetoothLeService extends Service{
                     }
 
                     try {
-                        mtuLatch.await(5000, TimeUnit.MILLISECONDS);
+                        mtuLatch.await();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
 
                 /* We failed... Requeue the Item */
                     if (mGatt == null || item.isErrorSendFlag()) {
-                        item.setErrorSendFlag(false);
-                        sendQueue.add(item);
+                        resetQueuedItem(item);
                         return;
                     }
 
@@ -437,8 +463,7 @@ public class BluetoothLeService extends Service{
 
                 /* We failed to get the services... requeue*/
                     if (service == null || item.isErrorSendFlag()) {
-                        item.setErrorSendFlag(false);
-                        sendQueue.add(item);
+                        resetQueuedItem(item);
                         return;
                     }
 
@@ -449,8 +474,7 @@ public class BluetoothLeService extends Service{
                     ));
 
                     if (characteristic == null || item.isErrorSendFlag()) {
-                        item.setErrorSendFlag(false);
-                        sendQueue.add(item);
+                        resetQueuedItem(item);
                         return;
                     }
 
@@ -465,7 +489,7 @@ public class BluetoothLeService extends Service{
                             continue;
                         }
                         try {
-                            sendPacketLatch.await(1000, TimeUnit.MILLISECONDS);
+                            sendPacketLatch.await();
                             if(sendPacketLatch.getCount() != packets.size() - i - 1){
                                 Log.e(TAG, "\t\t Failed to send Packet... Requeing");
                                 item.setErrorSendFlag(false);
@@ -479,16 +503,27 @@ public class BluetoothLeService extends Service{
 
 
                     //We've Finished sending this Queue Item! Time to send the next one
-                    bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
                 } finally{
                     if(mGatt != null) {
                         mGatt.disconnect();
-                        mGatt.close();
                     }
+                    bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
                 }
             }
         }
     };
+
+    private void resetQueuedItem(QueueItem item){
+        item.setErrorSendFlag(false);
+        if(item.retryTimes < 3){
+            item.retryTimes++;
+            sendQueue.add(item);
+            Log.d("SendRunnable", "Retry #" + item.retryTimes + " to send Message: " + item.getMessage().toString());
+        }
+        else{
+            Log.e("BluetoothLeService", "Failed to send Message: " + item.getMessage().toString());
+        }
+    }
 
     /**
      * Will start scanning for device and pulling their basic info at a constant interval
@@ -598,6 +633,7 @@ public class BluetoothLeService extends Service{
         private FTNLibrary.Message message;
         private boolean isForward;
         private boolean errorSendFlag = false;
+        private int retryTimes = 0;
 
         /**
          * This is a Forward Request
@@ -655,6 +691,7 @@ public class BluetoothLeService extends Service{
      */
     public void sendMessage(FTNLibrary.Message message){
         QueueItem item = new QueueItem(message);
+        item.getMessage().fromUUID = mUUID;
         sendQueue.add(item);
         bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
     }

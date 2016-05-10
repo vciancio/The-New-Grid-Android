@@ -89,6 +89,7 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         btnSend = (Button) mContentView.findViewById(R.id.btn_send);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        ((LinearLayoutManager) recyclerView.getLayoutManager()).setStackFromEnd(true);
 
         btnSend.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -151,8 +152,8 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         if(sendingService != null){
             FTNLibrary.Message message = new FTNLibrary.Message();
             message.address = DbHelper.getInstance(getContext()).getAddress(otherUUID);
-            message.uuid = otherUUID;
             message.body = text;
+            message.toUUID = otherUUID;
             message.isEncrypted = false;
 
             sendingService.sendMessage(message);

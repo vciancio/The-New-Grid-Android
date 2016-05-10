@@ -13,6 +13,8 @@ public class Constants {
 
     public static final String JSON_KEY_BODY = "body";
     public static final String JSON_KEY_UUID = "uuid";
+    public static final String JSON_KEY_TO_UUID = "toUUID";
+    public static final String JSON_KEY_FROM_UUID = "fromUUID";
     public static final String JSON_KEY_ADDRESS = "address";
     public static final String JSON_KEY_FORWARD = "isForward";
     public static final String JSON_KEY_ENCRYPTED = "encrypted";
