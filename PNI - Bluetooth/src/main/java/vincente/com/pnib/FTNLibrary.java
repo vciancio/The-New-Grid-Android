@@ -36,6 +36,8 @@ public class FTNLibrary {
         }
     }
 
+
+
     /**
      * Creates a queue of packets to be sent for a given message
      * @param value message to be packed up and sent
@@ -98,5 +100,62 @@ public class FTNLibrary {
             packet.clear();
         }
         return packets;
+    }
+
+        /*
+         Packet Init - 20 bytes
+         |initial  |sequence#|      data|
+         |---------|---------|----------|
+         | 1 byte  | 2 bytes | 17 bytes |
+
+         * Sequence # will be total amount of sequence numbers for the transaction.
+         * Will be the size of the the message we are sending.
+         * Data will be the size of the data we are sending
+         * Initial will be set to '0x01'
+         */
+
+        /*
+         Packet - 20 bytes total
+          |initial  |sequence#|      data|
+          |---------|---------|----------|
+          | 1 byte  | 2 bytes | 17 bytes |
+
+          * Initial will be set to '0x00'
+          * Sequence number will align with which packet we're sending
+          * Data is the data we will be sending
+          */
+
+    public class MessagePacket{
+
+        public byte totalPacketNum[];
+        public byte toUUID[];
+        public byte fromUUID[];
+        public int offset;
+        public String data;
+
+        /*
+         Packet Init - 20 bytes
+         |initial  |currentPacket|totalPacket|extraHeader|
+         |---------|-------------|-----------|-----------|
+         | 1 byte  |   2 bytes   |  2 bytes  |  x bytes  |
+
+         * Sequence # will be total amount of sequence numbers for the transaction.
+         * Will be the size of the the message we are sending.
+         * Data will be the size of the data we are sending
+         * Initial will be set to '0x01'
+         * Offset will be the size of the initial + currentPacket + totalPacket+extraHeader
+         */
+        public class MessagePacketPart{
+            public byte init;
+            public byte currentPacketNum[];
+            public byte totalPacketNum[];
+            public byte extraHeader[];
+            public int offset;
+            public String data;
+
+            public MessagePacketPart(String body){
+
+            }
+        }
     }
 }

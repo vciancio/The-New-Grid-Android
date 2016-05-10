@@ -24,6 +24,7 @@ import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
+import android.util.ArrayMap;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -45,7 +46,7 @@ public class GattServerService extends Service {
     private BluetoothManager mBluetoothManager;
     public BluetoothGattServer server;
     private Map<String, Integer> mtuMap;
-    private Map<String, CharArrayBuffer> dataBuffer;
+    private Map<String, CharArrayBuffer> dataBuffer = new ArrayMap<>();
     private ServerBinder binder = new ServerBinder();
     @Nullable
     @Override

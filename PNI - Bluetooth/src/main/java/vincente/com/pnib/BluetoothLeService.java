@@ -89,7 +89,11 @@ public class BluetoothLeService extends Service{
      */
     private IBinder mBinder = new LocalBinder();
 
+    /**
+     * A reference to open BluetoothGatts. These should be closed when removing from the map.
+     */
     private Map<byte[], BluetoothGatt> bluetoothGattMap = new IdentityHashMap<>();
+
     private String mUUID;
 
     public BluetoothLeService() {
@@ -346,6 +350,7 @@ public class BluetoothLeService extends Service{
                     final CountDownLatch sendPacketLatch= new CountDownLatch(packets.size());
 
                     final int[] mMtu = new int[1];
+                    final byte[] uuid = Config.bytesFromString(item.getMessage().toUUID);
 
                     //Once we've connected, count down the connection latch to continue sending
                     final BluetoothGattCallback callback = new BluetoothGattCallback() {
@@ -362,9 +367,16 @@ public class BluetoothLeService extends Service{
                                 }
                                 gatt.discoverServices();
                             } else if(newState == BluetoothProfile.STATE_DISCONNECTED){
-                                Log.e(TAG, "\t\tRandomly disconnected... status: " + status);
-                                connectionLatch.countDown();
-                                connectionLatch.countDown();
+                                if(status == BluetoothGatt.GATT_SUCCESS){
+                                    Log.d(TAG, "\t\tSuccessfully disconnected from the device");
+                                }
+                                else {
+                                    Log.e(TAG, "\t\tRandomly disconnected... status: " + status);
+                                    gatt.close();
+                                    bluetoothGattMap.remove(uuid);
+                                    connectionLatch.countDown();
+                                    connectionLatch.countDown();
+                                }
                             }
                             else{
                                 Log.wtf(TAG, "I have no idea what happened... status=" + status + ", newState=" + newState);
@@ -414,7 +426,6 @@ public class BluetoothLeService extends Service{
                         }
                     };
 
-                    byte[] uuid = Config.bytesFromString(item.getMessage().toUUID);
                     mBluetoothAdapter.cancelDiscovery();
                     if(!bluetoothGattMap.containsKey(uuid)){
                         mGatt = device.connectGatt(getApplicationContext(), false, callback, BluetoothDevice.TRANSPORT_LE);
