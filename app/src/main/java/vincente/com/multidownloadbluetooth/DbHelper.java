@@ -10,6 +10,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
@@ -19,7 +20,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
     // All Static variables
     // Database Version
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     // Database Name
     private static final String DATABASE_NAME = "FTNDatabase.db";
@@ -39,6 +40,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public static final String KEY_ENCRYPTED    = "encrypted";
     public static final String KEY_SENT_FROM_ME = "sent_from_me";
     public static final String KEY_PUBLIC_KEY   = "public_key";
+    public static final String KEY_IN_RANGE     = "inRange";
 
     public static DbHelper instance;
 
@@ -55,21 +57,14 @@ public class DbHelper extends SQLiteOpenHelper {
     // Creating Tables
     @Override
     public void onCreate(SQLiteDatabase db) {
-/*
-        String CREATE_SEEN_TABLE =
-                "CREATE TABLE SEENDEVICE\n" +
-                "  ( \n" +
-                "  address text not null primary key, \n" +
-                "  public_key text default null \n" +
-                "  );\n" +
-                "\n";
-*/
+
         String CREATE_CONTACTS_TABLE =
                 "CREATE TABLE CONTACT ( \n" +
                         " uuid text not null primary key, \n" +
                         " address text not null, \n" +
                         " public_key text default null, \n" +
-                        " nickname text\n" +
+                        " nickname text, \n" +
+                        " inRange integer default 0\n" +
                         ");\n";
 
         String CREATE_MESSAGE_TABLE =
@@ -130,21 +125,14 @@ public class DbHelper extends SQLiteOpenHelper {
      * @param address
      * @return
      */
-    public boolean addAddress(String uuid, String address){
+    public boolean addAddress(String uuid, String address, boolean inRange){
         SQLiteDatabase db = getWritableDatabase();
-/*
-        SQLiteStatement knownDevicesStatement =
-                db.compileStatement(
-                        "INSERT INTO " + DbHelper.TABLE_SEEN_DEVICE
-                                + "(" + DbHelper.KEY_ADDRESS + ")"
-                                + " VALUES (" + DatabaseUtils.sqlEscapeString(address) + ");");
-*/
         SQLiteStatement contactStatement =
                 db.compileStatement(
                         "INSERT INTO " + DbHelper.TABLE_CONTACT
-                                + "(" + DbHelper.KEY_ADDRESS + ", " + KEY_UUID + ") "
+                                + "(" + DbHelper.KEY_ADDRESS + ", " + KEY_UUID + ", " + KEY_IN_RANGE + ") "
                                 + "VALUES (" + DatabaseUtils.sqlEscapeString(address) + ", "
-                                + DatabaseUtils.sqlEscapeString(uuid) + ");");
+                                + DatabaseUtils.sqlEscapeString(uuid) + ", " + (inRange?1:0) + ");");
         SQLiteStatement updateStatement = db.compileStatement(
                 "UPDATE " + DbHelper.TABLE_CONTACT + "\n"
                         + "SET " + DbHelper.KEY_ADDRESS + "=" + DatabaseUtils.sqlEscapeString(address) + "\n"
@@ -272,6 +260,82 @@ public class DbHelper extends SQLiteOpenHelper {
                 cursor.close();
             }
         }
+    }
+
+    public String[] inRangeDevices(){
+        ArrayList<String> addresses = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = null;
+        String[] columns = {KEY_ADDRESS};
+        try{
+            cursor = db.query(
+                    TABLE_CONTACT,
+                    columns,
+                    KEY_IN_RANGE + "=" + 1,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+            cursor.moveToPosition(-1);
+            while(cursor.moveToNext()){
+                addresses.add(cursor.getString(cursor.getColumnIndex(KEY_ADDRESS)));
+            }
+            return addresses.toArray(new String[addresses.size()]);
+        } finally {
+            if(cursor != null){
+                cursor.close();
+            }
+        }
+    }
+
+    /**
+     * Returns whether or not the item was in range.
+     * @return whether or not we can connect to this device directly
+     */
+    public boolean isInRange(String uuid){
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = null;
+        String[] columns = {KEY_IN_RANGE};
+        try {
+            cursor = db.query(
+                    TABLE_CONTACT,
+                    columns,
+                    KEY_UUID + "=" + DatabaseUtils.sqlEscapeString(uuid),
+                    null,
+                    null,
+                    null,
+                    null
+            );
+            if(cursor.moveToFirst()){
+                if(cursor.getInt(cursor.getColumnIndex(KEY_IN_RANGE)) == 1){
+                    return true;
+                }
+            }
+            return false;
+        } finally{
+            if(cursor != null){
+                cursor.close();
+            }
+        }
+    }
+
+    /**
+     * Marks all the items in contact table as not in range.
+     * This is to be followed up by marking the ones that we find in the scan as in range.
+     */
+    public void clearInRangeFlag(){
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(KEY_IN_RANGE, 0);
+        db.beginTransaction();
+        db.update(
+                TABLE_CONTACT,
+                values,
+                null,
+                null
+        );
+        db.endTransaction();
     }
 
     public boolean upsert(String table, String where,

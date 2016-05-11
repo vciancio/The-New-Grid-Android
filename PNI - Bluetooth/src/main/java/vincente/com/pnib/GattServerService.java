@@ -205,19 +205,35 @@ public class GattServerService extends Service {
 
             //Handle the write request as an incoming message directed towards us.
             if(characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_MESSAGE)) {
-                //Switch the Address tag in the json to show the sender instead of us as the receiver
                 try {
                     JSONObject messageJSON = new JSONObject(new String(value));
-                    messageJSON.put(Constants.JSON_KEY_ADDRESS, device.getAddress());
-                    Intent i = new Intent(Constants.ACTION_RECEIVED_MESSAGE);
-                    i.putExtra(Constants.INTENT_EXTRA_RESULTS, messageJSON.toString());
-                    sendBroadcast(i);
+                    SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+
+                    //If this message was meant for us
+                    if(messageJSON.get(Constants.JSON_KEY_TO_UUID).equals(sp.getString(Constants.PREF_MY_UUID, "0"))) {
+                        //Switch the Address tag in the json to show the sender instead of us as the receiver
+                        messageJSON.put(Constants.JSON_KEY_ADDRESS, device.getAddress());
+                        Intent i = new Intent(Constants.ACTION_RECEIVED_MESSAGE);
+                        i.putExtra(Constants.INTENT_EXTRA_RESULTS, messageJSON.toString());
+                        sendBroadcast(i);
+                    }
+                    //We'll forward it to the people around us
+                    else{
+                        Intent i = new Intent(Constants.ACTION_FORWARD_MESSAGE);
+                        i.putExtra(Constants.INTENT_EXTRA_RESULTS, messageJSON.toString());
+                        sendBroadcast(i);
+                    }
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
             }
             else if (characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_FORWARD)) {
                 Log.d(TAG, "Got a forward message... idk what to do here...");
+                String rawJson = new String(value);
+                Intent i = new Intent(Constants.ACTION_FORWARD_MESSAGE);
+                i.putExtra(Constants.INTENT_EXTRA_RESULTS, rawJson);
+                sendBroadcast(i);
             }
         }
 

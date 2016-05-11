@@ -43,5 +43,6 @@ public class Constants {
      *     'body': 'message contents stored as a string'
      * }
      */
-    public static final String ACTION_RECEIVED_MESSAGE = "com.ftn.action.RECEIVED_MESSAGE";
+    public static final String ACTION_RECEIVED_MESSAGE  = "com.ftn.action.RECEIVED_MESSAGE";
+    public static final String ACTION_FORWARD_MESSAGE   = "com.ftn.action.FORWARD_MESSAGE";
 }

@@ -701,8 +701,13 @@ public class BluetoothLeService extends Service{
      * @param message The Message Object that we will send to a device
      */
     public void sendMessage(FTNLibrary.Message message){
+        sendMessage(message, false);
+    }
+
+    public void sendMessage(FTNLibrary.Message message, boolean isForward){
         QueueItem item = new QueueItem(message);
         item.getMessage().fromUUID = mUUID;
+        item.setIsForward(isForward);
         sendQueue.add(item);
         bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
     }

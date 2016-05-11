@@ -20,6 +20,37 @@ public class FTNLibrary {
         public String address = null;
         public boolean isEncrypted = false;
 
+
+        public Message(){}
+
+        public Message(String json){
+            try {
+                JSONObject jsonObject = new JSONObject(json);
+                constructFromJSON(jsonObject);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        public Message(JSONObject jsonObject){
+            constructFromJSON(jsonObject);
+        }
+
+        private void constructFromJSON(JSONObject jsonObject){
+            try {
+                this.body = jsonObject.getString(Constants.JSON_KEY_BODY);
+                this.toUUID = jsonObject.getString(Constants.JSON_KEY_TO_UUID);
+                this.fromUUID = jsonObject.getString(Constants.JSON_KEY_FROM_UUID);
+                if(jsonObject.has(Constants.JSON_KEY_ADDRESS)){
+                    this.address = jsonObject.getString(Constants.JSON_KEY_ADDRESS);
+                }
+                this.isEncrypted = jsonObject.getBoolean(Constants.JSON_KEY_ENCRYPTED);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
         @Override
         public String toString() {
             JSONObject object = new JSONObject();
@@ -27,7 +58,8 @@ public class FTNLibrary {
                 object.put(Constants.JSON_KEY_BODY, body);
                 object.put(Constants.JSON_KEY_TO_UUID, toUUID);
                 object.put(Constants.JSON_KEY_FROM_UUID, fromUUID);
-                object.put(Constants.JSON_KEY_ADDRESS, address);
+                if(address != null)
+                    object.put(Constants.JSON_KEY_ADDRESS, address);
                 object.put(Constants.JSON_KEY_ENCRYPTED, isEncrypted);
             } catch (JSONException e) {
                 e.printStackTrace();

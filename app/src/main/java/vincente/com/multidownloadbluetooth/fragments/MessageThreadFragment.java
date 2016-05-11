@@ -156,7 +156,15 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
             message.toUUID = otherUUID;
             message.isEncrypted = false;
 
-            sendingService.sendMessage(message);
+            //If we can't talk to the people directly, we're going to forward the message!
+            if(DbHelper.getInstance(getContext()).isInRange(otherUUID)) {
+                sendingService.sendMessage(message);
+            }
+            else{
+                Intent i = new Intent(vincente.com.pnib.Constants.ACTION_FORWARD_MESSAGE);
+                i.putExtra(vincente.com.pnib.Constants.INTENT_EXTRA_RESULTS, message.toString());
+                getContext().sendBroadcast(i);
+            }
         }
         DbHelper.getInstance(getContext()).addMessage(otherUUID, text, false, true);
         etMessage.clearComposingText();

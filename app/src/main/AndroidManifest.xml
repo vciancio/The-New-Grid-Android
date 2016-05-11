@@ -30,16 +30,25 @@
             android:theme="@style/AppTheme.NoActionBar"
             android:screenOrientation="portrait"/>
 
-        <receiver android:name=".ScanResultReceiver"
+        <service
+            android:name=".receivers.ForwardMessageReceiver$MyIntentService"/>
+
+        <receiver android:name=".receivers.ScanResultReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.ftn.action.SCAN_RESULTS" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".NewMessageReceiver"
+        <receiver android:name=".receivers.NewMessageReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.ftn.action.RECEIVED_MESSAGE"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".receivers.ForwardMessageReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ftn.action.FORWARD_MESSAGE"/>
             </intent-filter>
         </receiver>
     </application>
