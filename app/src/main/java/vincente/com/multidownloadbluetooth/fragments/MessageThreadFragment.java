@@ -151,10 +151,10 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
         Toast.makeText(getContext(), "Sending Message: " + text, Toast.LENGTH_SHORT).show();
         if(sendingService != null){
             FTNLibrary.Message message = new FTNLibrary.Message();
-            message.address = DbHelper.getInstance(getContext()).getAddress(otherUUID);
-            message.body = text;
-            message.toUUID = otherUUID;
-            message.isEncrypted = false;
+            message.setAddress(DbHelper.getInstance(getContext()).getAddress(otherUUID));
+            message.setBody(text);
+            message.setToUUID(otherUUID);
+            message.setIsEncrypted(false);
 
             sendingService.sendMessage(message);
         }
