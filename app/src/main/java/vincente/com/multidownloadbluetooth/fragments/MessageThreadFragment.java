@@ -161,9 +161,7 @@ public class MessageThreadFragment extends ProgressFragment implements ServiceCo
                 sendingService.sendMessage(message);
             }
             else{
-                Intent i = new Intent(vincente.com.pnib.Constants.ACTION_FORWARD_MESSAGE);
-                i.putExtra(vincente.com.pnib.Constants.INTENT_EXTRA_RESULTS, message.toString());
-                getContext().sendBroadcast(i);
+                sendingService.sendForwardMessage(message);
             }
         }
         DbHelper.getInstance(getContext()).addMessage(otherUUID, text, false, true);

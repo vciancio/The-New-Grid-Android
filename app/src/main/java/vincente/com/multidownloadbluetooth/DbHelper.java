@@ -135,7 +135,8 @@ public class DbHelper extends SQLiteOpenHelper {
                                 + DatabaseUtils.sqlEscapeString(uuid) + ", " + (inRange?1:0) + ");");
         SQLiteStatement updateStatement = db.compileStatement(
                 "UPDATE " + DbHelper.TABLE_CONTACT + "\n"
-                        + "SET " + DbHelper.KEY_ADDRESS + "=" + DatabaseUtils.sqlEscapeString(address) + "\n"
+                        + "SET " + DbHelper.KEY_ADDRESS + "=" + DatabaseUtils.sqlEscapeString(address)
+                        + ", " + DbHelper.KEY_IN_RANGE + "=" + (inRange?1:0) + "\n"
                         + "WHERE " + KEY_UUID + "=" + DatabaseUtils.sqlEscapeString(uuid) + ";");
 
         db.beginTransaction();
@@ -335,6 +336,7 @@ public class DbHelper extends SQLiteOpenHelper {
                 null,
                 null
         );
+        db.setTransactionSuccessful();
         db.endTransaction();
     }
 

@@ -704,11 +704,23 @@ public class BluetoothLeService extends Service{
         sendMessage(message, false);
     }
 
+    /**
+     * Should be called once we know who to send the message to
+     * @param message
+     * @param isForward
+     */
     public void sendMessage(FTNLibrary.Message message, boolean isForward){
         QueueItem item = new QueueItem(message);
         item.getMessage().fromUUID = mUUID;
         item.setIsForward(isForward);
         sendQueue.add(item);
         bleServiceHandler.sendEmptyMessage(BleServiceHandler.WHAT_SEND_NEXT_IN_QUEUE);
+    }
+
+    public void sendForwardMessage(FTNLibrary.Message message){
+        message.fromUUID = mUUID;
+        Intent i = new Intent(vincente.com.pnib.Constants.ACTION_FORWARD_MESSAGE);
+        i.putExtra(vincente.com.pnib.Constants.INTENT_EXTRA_RESULTS, message.toString());
+        this.sendBroadcast(i);
     }
 }
