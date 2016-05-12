@@ -17,11 +17,9 @@ import vincente.com.pnib.FTNLibrary;
 /**
  * Created by vincente on 5/11/16
  */
-public class MyIntentService extends IntentService {
-    private BluetoothLeService sendService = null;
-
-    public MyIntentService() {
-        super(MyIntentService.class.getSimpleName());
+public class ForwardingService extends IntentService {
+    public ForwardingService() {
+        super(ForwardingService.class.getSimpleName());
     }
 
     @Override
@@ -33,17 +31,6 @@ public class MyIntentService extends IntentService {
         String rawJSON = broadcastedIntent.getStringExtra(vincente.com.pnib.Constants.INTENT_EXTRA_RESULTS);
 
         final FTNLibrary.Message message = new FTNLibrary.Message(rawJSON);
-/*
-        if(sendService == null){
-            Toast.makeText(this, "Unable to forward Message to " + message.toUUID + ". " +
-                            "SendService Unavailable...",
-                    Toast.LENGTH_SHORT).show();
-            Log.e("ForwardMessageReceiver", "Unable to forward message to " + message.toUUID + ". " +
-                    "SendService Unavailable...");
-            return;
-        }
-        //Figure out who we need to get the message to.
-*/
         final String toUUID = message.toUUID;
 
         //Bind to the service and send the things we need
@@ -53,8 +40,8 @@ public class MyIntentService extends IntentService {
             public void onServiceConnected(ComponentName name, IBinder service) {
                 BluetoothLeService sendService = ((BluetoothLeService.LocalBinder) service).getSendingServiceInstance();
                 //Go through our db and see if we can reach them right now.
-                if(DbHelper.getInstance(MyIntentService.this).isInRange(toUUID)){
-                    message.address = DbHelper.getInstance(MyIntentService.this).getAddress(toUUID);
+                if(DbHelper.getInstance(ForwardingService.this).isInRange(toUUID)){
+                    message.address = DbHelper.getInstance(ForwardingService.this).getAddress(toUUID);
                     sendService.sendMessage(message, false);
                     Log.d("MyIntentService", "Forwarded a message for " +
                             UUID.nameUUIDFromBytes(Config.bytesFromString(message.toUUID)) +
@@ -63,7 +50,7 @@ public class MyIntentService extends IntentService {
                             " through " + message.address);
                 }
                 else{
-                    String addresses[] = DbHelper.getInstance(MyIntentService.this).inRangeDevices();
+                    String addresses[] = DbHelper.getInstance(ForwardingService.this).inRangeDevices();
                     for(String address : addresses){
                         message.address = address;
                         sendService.sendMessage(message, true);
@@ -81,7 +68,6 @@ public class MyIntentService extends IntentService {
             public void onServiceDisconnected(ComponentName name) {
                 Log.d("MyIntentService", "We have disconnected from the service");
             }
-
         }, Context.BIND_AUTO_CREATE);
     }
 }

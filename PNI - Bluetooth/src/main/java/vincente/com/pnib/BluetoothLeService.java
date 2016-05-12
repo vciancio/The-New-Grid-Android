@@ -15,10 +15,8 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Binder;
@@ -311,19 +309,6 @@ public class BluetoothLeService extends Service{
     private Runnable sendRunnable = new Runnable() {
         private final Object lock = new Object();
         private final static String TAG = "SendRunnable";
-        private GattServerService gattServerService;
-        ServiceConnection connection = new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName name, IBinder service) {
-
-            }
-
-            @Override
-            public void onServiceDisconnected(ComponentName name) {
-
-            }
-        };
-
         @Override
         public void run() {
             if (sendQueue.isEmpty())
@@ -553,85 +538,6 @@ public class BluetoothLeService extends Service{
         }
         else{
             return null;
-        }
-    }
-
-    /**
-     * A Class which allows us to save our connection so we can map the callbacks to the device.
-     */
-    private class RememberingBluetoothGattCallback extends BluetoothGattCallback{
-        private static final String TAG = "mBluetoothGattCallback";
-        private BluetoothDevice device;
-
-        private RememberingBluetoothGattCallback(BluetoothDevice device) {
-            this.device = device;
-        }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            Log.d(TAG, "\tFound Services!");
-
-            for (BluetoothGattService service : gatt.getServices()) {
-                Log.d(TAG, "\t\tFound Service: " + service.getUuid());
-            }
-        }
-
-        /**
-         * Will perform a get profile from the connected device in STATE_CONNECTED switch case
-         */
-        @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "Successfully connected to " + gatt.getDevice().getAddress());
-            } else {
-                Log.d(TAG, "Could not connect to " + gatt.getDevice().getAddress());
-            }
-            switch (newState) {
-                case BluetoothProfile.STATE_CONNECTED:
-                    Log.d(TAG, "\tState Change: Connected to " + gatt.getDevice().getAddress());
-                    gatt.discoverServices();
-                    break;
-                case BluetoothProfile.STATE_DISCONNECTED:
-                    Log.d(TAG, "\tState Change: Disconnected from " + gatt.getDevice().getAddress());
-                    break;
-                default:
-                    Log.d(TAG, "\tWhatNewState");
-            }
-        }
-
-        /**
-         * This is where we are handling getting other people's profile
-         */
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "\tSuccessfully read from gatt");
-                switch (characteristic.getUuid().toString()) {
-                    case Config.UUID_CHARACTERISTIC_FORWARD:
-                        Log.d(TAG, "\t\tRead {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-                        break;
-                    default:
-                        Log.d(TAG, "\t\tRead an unknown UUID: {'value':'" + characteristic.getStringValue(0) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-                }
-            } else {
-                Log.e(TAG, "\tCouldn't read from " + gatt.getDevice().getAddress() + " correctly");
-            }
-        }
-
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            Log.d(TAG, "\tin onCharacteristicWrite");
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "\tWrote Characteristic! {'value':'" + Arrays.toString(characteristic.getValue()) + "', 'uuid':'" + characteristic.getUuid() + "'}");
-            }
-        }
-
-        @Override
-        public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
-            Log.d(TAG, "In onReliableWriteCompleted");
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "\tCompleted Reliable Write successfully!");
-            }
         }
     }
 

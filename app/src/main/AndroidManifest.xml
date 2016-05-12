@@ -31,7 +31,7 @@
             android:screenOrientation="portrait"/>
 
         <service
-            android:name=".MyIntentService"/>
+            android:name=".ForwardingService"/>
 
         <receiver android:name=".receivers.ScanResultReceiver"
             android:exported="false">
