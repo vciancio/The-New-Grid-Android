@@ -20,7 +20,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
     // All Static variables
     // Database Version
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 1;
 
     // Database Name
     private static final String DATABASE_NAME = "FTNDatabase.db";
@@ -183,7 +183,8 @@ public class DbHelper extends SQLiteOpenHelper {
         String[] projection = {
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_UUID,
                 DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_NICKNAME,
-                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_PUBLIC_KEY
+                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_PUBLIC_KEY,
+                DbHelper.TABLE_CONTACT + "." + DbHelper.KEY_IN_RANGE
         };
 
         String selection = DbHelper.TABLE_CONTACT;

@@ -18,6 +18,7 @@ import vincente.com.pnib.FTNLibrary;
  * Created by vincente on 5/11/16
  */
 public class ForwardingService extends IntentService {
+    private static final String TAG = "ForwardingService";
     public ForwardingService() {
         super(ForwardingService.class.getSimpleName());
     }
@@ -34,7 +35,7 @@ public class ForwardingService extends IntentService {
         final String toUUID = message.toUUID;
 
         //Bind to the service and send the things we need
-        Log.d("MyIntentService", "Binding to SendingService..");
+        Log.d(TAG, "Binding to SendingService..");
         bindService(bindIntent, new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName name, IBinder service) {
@@ -43,7 +44,7 @@ public class ForwardingService extends IntentService {
                 if(DbHelper.getInstance(ForwardingService.this).isInRange(toUUID)){
                     message.address = DbHelper.getInstance(ForwardingService.this).getAddress(toUUID);
                     sendService.sendMessage(message, false);
-                    Log.d("MyIntentService", "Forwarded a message for " +
+                    Log.d(TAG, "Forwarded a message for " +
                             UUID.nameUUIDFromBytes(Config.bytesFromString(message.toUUID)) +
                             " from " +
                             UUID.nameUUIDFromBytes(Config.bytesFromString(message.fromUUID)) +
@@ -54,7 +55,7 @@ public class ForwardingService extends IntentService {
                     for(String address : addresses){
                         message.address = address;
                         sendService.sendMessage(message, true);
-                        Log.d("MyIntentService", "Forwarded a message for " +
+                        Log.d(TAG, "Forwarded a message for " +
                                 UUID.nameUUIDFromBytes(Config.bytesFromString(message.toUUID)) +
                                 " from " +
                                 UUID.nameUUIDFromBytes(Config.bytesFromString(message.fromUUID)) +
@@ -66,7 +67,7 @@ public class ForwardingService extends IntentService {
 
             @Override
             public void onServiceDisconnected(ComponentName name) {
-                Log.d("MyIntentService", "We have disconnected from the service");
+                Log.d(TAG, "We have disconnected from the service");
             }
         }, Context.BIND_AUTO_CREATE);
     }

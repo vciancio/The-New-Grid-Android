@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by vincente on 4/12/16
@@ -423,7 +424,7 @@ public class BluetoothLeService extends Service{
 
                     //Wait for a state of Connected for 5000 ms. If we won't don't connect, end this;
                     try {
-                        connectionLatch.await();
+                        connectionLatch.await(6000, TimeUnit.MILLISECONDS);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -432,8 +433,8 @@ public class BluetoothLeService extends Service{
                         resetQueuedItem(item);
                         return;
                     }
-                    if (mMtu[0] != 256) {
-                        boolean usingMTU = mGatt.requestMtu(256);
+                    if (mMtu[0] != 512) {
+                        boolean usingMTU = mGatt.requestMtu(512);
                         if (usingMTU) {
                             Log.d("SendRunnable", "\t\tRequesting to use the MTU");
                         } else {
@@ -444,7 +445,7 @@ public class BluetoothLeService extends Service{
                     }
 
                     try {
-                        mtuLatch.await();
+                        mtuLatch.await(6000, TimeUnit.MILLISECONDS);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -485,7 +486,7 @@ public class BluetoothLeService extends Service{
                             continue;
                         }
                         try {
-                            sendPacketLatch.await();
+                            sendPacketLatch.await(6000, TimeUnit.MILLISECONDS);
                             if(sendPacketLatch.getCount() != packets.size() - i - 1){
                                 Log.e(TAG, "\t\t Failed to send Packet... Requeing");
                                 item.setErrorSendFlag(false);

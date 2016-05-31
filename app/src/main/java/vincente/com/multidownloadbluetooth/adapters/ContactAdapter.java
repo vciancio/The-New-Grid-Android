@@ -3,6 +3,7 @@ package vincente.com.multidownloadbluetooth.adapters;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.graphics.PorterDuff;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -58,6 +59,7 @@ public class ContactAdapter extends CursorRecyclerViewAdapter<ContactAdapter.Vie
         int CUR_IDX_ID = cursor.getColumnIndex(DbHelper.KEY_ID);
         int CUR_IDX_UUID = cursor.getColumnIndex(DbHelper.KEY_UUID);
         int CUR_IDX_NICKNAME = cursor.getColumnIndex(DbHelper.KEY_NICKNAME);
+        int CUR_IDX_IN_RANGE = cursor.getColumnIndex(DbHelper.KEY_IN_RANGE);
 
         String nameFormat = "%s [%s]";
         String nickname = cursor.getString(CUR_IDX_NICKNAME);
@@ -68,7 +70,13 @@ public class ContactAdapter extends CursorRecyclerViewAdapter<ContactAdapter.Vie
                 UUID.nameUUIDFromBytes(Config.bytesFromString(holder.uuid))
         ));
 
-        holder.ivContactPhoto.setImageResource(R.mipmap.ic_launcher);
+//        imageView.setColorFilter(main.getResources().getColor(R.color.blue), android.graphics.PorterDuff.Mode.MULTIPLY);
+
+        if(cursor.getInt(CUR_IDX_IN_RANGE)==1){
+            holder.ivContactPhoto.setColorFilter(android.R.color.holo_red_dark, PorterDuff.Mode.SRC_ATOP);
+        } else {
+            holder.ivContactPhoto.setColorFilter(null);
+        }
         holder.itemView.setOnClickListener(holder);
     }
 

@@ -91,7 +91,7 @@ public class GattServerService extends Service {
         BluetoothLeAdvertiser advertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
         AdvertiseSettings settings = new AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW)
                 .setConnectable(true)
                 .build();
 
@@ -203,14 +203,15 @@ public class GattServerService extends Service {
                 Log.d(TAG, "\tCouldn't send a response");
             }
 
+            SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+            String myUUID = sp.getString(Constants.PREF_MY_UUID, "0");
             //Handle the write request as an incoming message directed towards us.
             if(characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_MESSAGE)) {
                 try {
                     JSONObject messageJSON = new JSONObject(new String(value));
-                    SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
 
                     //If this message was meant for us
-                    if(messageJSON.get(Constants.JSON_KEY_TO_UUID).equals(sp.getString(Constants.PREF_MY_UUID, "0"))) {
+                    if(messageJSON.get(Constants.JSON_KEY_TO_UUID).equals(myUUID)) {
                         //Switch the Address tag in the json to show the sender instead of us as the receiver
                         messageJSON.put(Constants.JSON_KEY_ADDRESS, device.getAddress());
                         Intent i = new Intent(Constants.ACTION_RECEIVED_MESSAGE);
@@ -219,6 +220,9 @@ public class GattServerService extends Service {
                     }
                     //We'll forward it to the people around us
                     else{
+                        if(messageJSON.getString(Constants.JSON_KEY_FROM_UUID).equals(myUUID)){
+                            return; //We don't want to forward it to other people
+                        }
                         Intent i = new Intent(Constants.ACTION_FORWARD_MESSAGE);
                         i.putExtra(Constants.INTENT_EXTRA_RESULTS, messageJSON.toString());
                         sendBroadcast(i);
@@ -229,7 +233,11 @@ public class GattServerService extends Service {
                 }
             }
             else if (characteristic.getUuid().toString().equals(Config.UUID_CHARACTERISTIC_FORWARD)) {
-                Log.d(TAG, "Got a forward message... idk what to do here...");
+                Log.d(TAG, "Recieved a request to forward");
+                FTNLibrary.Message message = new FTNLibrary.Message(new String(value));
+                if(message.fromUUID.equals(myUUID)){
+                    return; //We don't want to forward my own message since we already did!
+                }
                 String rawJson = new String(value);
                 Intent i = new Intent(Constants.ACTION_FORWARD_MESSAGE);
                 i.putExtra(Constants.INTENT_EXTRA_RESULTS, rawJson);
